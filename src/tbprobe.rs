@@ -1,8 +1,11 @@
 use std::{
-    ffi::CStr, fs::{File, OpenOptions}, os::fd::AsRawFd, sync::{
+    ffi::CStr,
+    fs::{File, OpenOptions},
+    os::fd::AsRawFd,
+    sync::{
         atomic::{AtomicBool, Ordering},
         Mutex,
-    }
+    },
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -2577,74 +2580,59 @@ unsafe extern "C" fn setup_pairs(
     (*d).offset = ((*d).offset).offset(-((*d).minLen as i32 as isize));
     d
 }
-unsafe extern "C" fn init_table(
-    mut be: *mut BaseEntry,
-    mut str: *const i8,
-    mut type_0: i32,
-) -> bool {
-    let mut data: *mut u8 = map_tb(
+unsafe extern "C" fn init_table(be: *mut BaseEntry, str: *const i8, type_0: i32) -> bool {
+    let mut data = map_tb(
         str,
         tbSuffix[type_0 as usize],
         &mut *((*be).mapping).as_mut_ptr().offset(type_0 as isize),
     ) as *mut u8;
     if data.is_null() {
-        return 0 != 0;
+        return false;
     }
+
     if read_le_u32(data as *mut libc::c_void) != TB_MAGIC[type_0 as usize] {
         fprintf(stderr, b"Corrupted table.\n\0" as *const u8 as *const i8);
         unmap_file(data as *mut libc::c_void, (*be).mapping[type_0 as usize]);
-        return 0 != 0;
+        return false;
     }
+
     (*be).data[type_0 as usize] = data;
-    let mut split: bool =
-        type_0 != DTZ as i32 && *data.offset(4 as i32 as isize) as i32 & 0x1 as i32 != 0;
+    let split: bool = type_0 != DTZ as i32 && *data.offset(4) as i32 & 0x1 != 0;
     if type_0 == DTM as i32 {
-        (*be).dtmLossOnly = *data.offset(4 as i32 as isize) as i32 & 0x4 as i32 != 0;
+        (*be).dtmLossOnly = *data.offset(4) as i32 & 0x4 != 0;
     }
-    data = data.offset(5 as i32 as isize);
-    let mut tb_size: [[u64; 2]; 6] = [[0; 2]; 6];
-    let mut num: i32 = num_tables(be, type_0);
-    let mut ei: *mut EncInfo = first_ei(be, type_0);
-    let mut enc: i32 = if !(*be).hasPawns {
+    data = data.offset(5);
+    let mut tb_size = [[0; 2]; 6];
+    let num = num_tables(be, type_0);
+    let ei = first_ei(be, type_0);
+    let enc = if !(*be).hasPawns {
         PIECE_ENC as i32
     } else if type_0 != DTM as i32 {
         FILE_ENC as i32
     } else {
         RANK_ENC as i32
     };
-    let mut t: i32 = 0;
-    while t < num {
-        tb_size[t as usize][0 as i32 as usize] =
-            init_enc_info(&mut *ei.offset(t as isize), be, data, 0, t, enc);
+    for t in 0..num {
+        tb_size[t as usize][0] = init_enc_info(&mut *ei.offset(t as isize), be, data, 0, t, enc);
         if split {
-            tb_size[t as usize][1 as i32 as usize] = init_enc_info(
-                &mut *ei.offset((num + t) as isize),
-                be,
-                data,
-                4 as i32,
-                t,
-                enc,
-            );
+            tb_size[t as usize][1] =
+                init_enc_info(&mut *ei.offset((num + t) as isize), be, data, 4, t, enc);
         }
         data = data.offset(
             ((*be).num as i32
                 + 1
-                + ((*be).hasPawns as i32 != 0
-                    && (*be).c2rust_unnamed.pawns[1 as i32 as usize] as i32 != 0)
-                    as i32) as isize,
+                + ((*be).hasPawns as i32 != 0 && (*be).c2rust_unnamed.pawns[1] as i32 != 0) as i32)
+                as isize,
         );
-        t += 1;
     }
-    data = data.offset((data as u64 & 1 as u64) as isize);
-    let mut size: [[[u64; 3]; 2]; 6] = [[[0; 3]; 2]; 6];
-    let mut t_0: i32 = 0;
-    while t_0 < num {
+    data = data.offset((data as u64 & 1) as isize);
+    let mut size = [[[0; 3]; 2]; 6];
+    for t_0 in 0..num {
         let mut flags: u8 = 0;
-        let fresh15 = &mut (*ei.offset(t_0 as isize)).precomp;
-        *fresh15 = setup_pairs(
+        (*ei.offset(t_0 as isize)).precomp = setup_pairs(
             &mut data,
-            tb_size[t_0 as usize][0 as i32 as usize],
-            (size[t_0 as usize][0 as i32 as usize]).as_mut_ptr(),
+            tb_size[t_0 as usize][0],
+            (size[t_0 as usize][0]).as_mut_ptr(),
             &mut flags,
             type_0,
         );
@@ -2656,29 +2644,25 @@ unsafe extern "C" fn init_table(
             }
         }
         if split {
-            let fresh16 = &mut (*ei.offset((num + t_0) as isize)).precomp;
-            *fresh16 = setup_pairs(
+            (*ei.offset((num + t_0) as isize)).precomp = setup_pairs(
                 &mut data,
-                tb_size[t_0 as usize][1 as i32 as usize],
-                (size[t_0 as usize][1 as i32 as usize]).as_mut_ptr(),
+                tb_size[t_0 as usize][1],
+                (size[t_0 as usize][1]).as_mut_ptr(),
                 &mut flags,
                 type_0,
             );
         } else if type_0 != DTZ as i32 {
-            let fresh17 = &mut (*ei.offset((num + t_0) as isize)).precomp;
-            *fresh17 = std::ptr::null_mut::<PairsData>();
+            (*ei.offset((num + t_0) as isize)).precomp = std::ptr::null_mut::<PairsData>();
         }
-        t_0 += 1;
     }
     if type_0 == DTM as i32 && !(*be).dtmLossOnly {
-        let mut map: *mut u16 = data as *mut u16;
-        let fresh18 = &mut (*if (*be).hasPawns as i32 != 0 {
-            &mut (*(be as *mut PawnEntry)).dtmMap
+        let mut map = data as *mut u16;
+        if (*be).hasPawns as i32 != 0 {
+            (*(be as *mut PawnEntry)).dtmMap = map
         } else {
-            &mut (*(be as *mut PieceEntry)).dtmMap
-        });
-        *fresh18 = map;
-        let mut mapIdx: *mut [[u16; 2]; 2] = if (*be).hasPawns as i32 != 0 {
+            (*(be as *mut PieceEntry)).dtmMap = map
+        };
+        let mut mapIdx = if (*be).hasPawns as i32 != 0 {
             &mut *((*(be as *mut PawnEntry)).dtmMapIdx)
                 .as_mut_ptr()
                 .offset(0 as i32 as isize) as *mut [[u16; 2]; 2]
@@ -2689,22 +2673,19 @@ unsafe extern "C" fn init_table(
         while t_1 < num {
             let mut i: i32 = 0;
             while i < 2 as i32 {
-                (*mapIdx.offset(t_1 as isize))[0 as i32 as usize][i as usize] =
-                    data.offset(1 as isize).offset_from(map as *mut u8) as i64 as u16;
-                data = data.offset(
-                    (2 as i32 + 2 as i32 * read_le_u16(data as *mut libc::c_void) as i32) as isize,
-                );
+                (*mapIdx.offset(t_1 as isize))[0][i as usize] =
+                    data.offset(1 as isize).offset_from(map as *mut u8) as u16;
+                data =
+                    data.offset((2 + 2 * read_le_u16(data as *mut libc::c_void) as i32) as isize);
                 i += 1;
             }
             if split {
                 let mut i_0: i32 = 0;
                 while i_0 < 2 as i32 {
-                    (*mapIdx.offset(t_1 as isize))[1 as i32 as usize][i_0 as usize] =
-                        data.offset(1 as isize).offset_from(map as *mut u8) as i64 as u16;
-                    data = data.offset(
-                        (2 as i32 + 2 as i32 * read_le_u16(data as *mut libc::c_void) as i32)
-                            as isize,
-                    );
+                    (*mapIdx.offset(t_1 as isize))[1][i_0 as usize] =
+                        data.offset(1 as isize).offset_from(map as *mut u8) as u16;
+                    data = data
+                        .offset((2 + 2 * read_le_u16(data as *mut libc::c_void) as i32) as isize);
                     i_0 += 1;
                 }
             }
@@ -2712,17 +2693,14 @@ unsafe extern "C" fn init_table(
         }
     }
     if type_0 == DTZ as i32 {
-        let mut map_0: *mut libc::c_void = data as *mut libc::c_void;
-        let fresh19 = &mut (*if (*be).hasPawns as i32 != 0 {
-            &mut (*(be as *mut PawnEntry)).dtzMap
+        let mut map_0 = data as *mut libc::c_void;
+        if (*be).hasPawns as i32 != 0 {
+            (*(be as *mut PawnEntry)).dtzMap = map_0
         } else {
-            &mut (*(be as *mut PieceEntry)).dtzMap
-        });
-        *fresh19 = map_0;
-        let mut mapIdx_0: *mut [u16; 4] = if (*be).hasPawns as i32 != 0 {
-            &mut *((*(be as *mut PawnEntry)).dtzMapIdx)
-                .as_mut_ptr()
-                .offset(0 as i32 as isize) as *mut [u16; 4]
+            (*(be as *mut PieceEntry)).dtzMap = map_0
+        };
+        let mut mapIdx_0 = if (*be).hasPawns as i32 != 0 {
+            &mut *((*(be as *mut PawnEntry)).dtzMapIdx).as_mut_ptr().offset(0) as *mut [u16; 4]
         } else {
             &mut (*(be as *mut PieceEntry)).dtzMapIdx
         };
@@ -2735,27 +2713,23 @@ unsafe extern "C" fn init_table(
         };
         let mut t_2: i32 = 0;
         while t_2 < num {
-            if *flags_0.offset(t_2 as isize) as i32 & 2 as i32 != 0 {
-                if *flags_0.offset(t_2 as isize) as i32 & 16 as i32 == 0 {
+            if *flags_0.offset(t_2 as isize) as i32 & 2 != 0 {
+                if *flags_0.offset(t_2 as isize) as i32 & 16 == 0 {
                     let mut i_1: i32 = 0;
                     while i_1 < 4 as i32 {
                         (*mapIdx_0.offset(t_2 as isize))[i_1 as usize] =
-                            data.offset(1 as isize).offset_from(map_0 as *mut u8) as i64 as u16;
-                        data = data.offset((1 + *data.offset(0 as i32 as isize) as i32) as isize);
+                            data.offset(1).offset_from(map_0 as *mut u8) as u16;
+                        data = data.offset((1 + *data.offset(0) as i32) as isize);
                         i_1 += 1;
                     }
                 } else {
-                    data = data.offset((data as u64 & 0x1 as i32 as u64) as isize);
+                    data = data.offset((data as u64 & 0x1) as isize);
                     let mut i_2: i32 = 0;
                     while i_2 < 4 as i32 {
-                        (*mapIdx_0.offset(t_2 as isize))[i_2 as usize] = (data as *mut u16)
-                            .offset(1 as isize)
-                            .offset_from(map_0 as *mut u16)
-                            as i64
-                            as u16;
+                        (*mapIdx_0.offset(t_2 as isize))[i_2 as usize] =
+                            (data as *mut u16).offset(1).offset_from(map_0 as *mut u16) as u16;
                         data = data.offset(
-                            (2 as i32 + 2 as i32 * read_le_u16(data as *mut libc::c_void) as i32)
-                                as isize,
+                            (2 + 2 * read_le_u16(data as *mut libc::c_void) as i32) as isize,
                         );
                         i_2 += 1;
                     }
@@ -2763,54 +2737,47 @@ unsafe extern "C" fn init_table(
             }
             t_2 += 1;
         }
-        data = data.offset((data as u64 & 0x1 as i32 as u64) as isize);
+        data = data.offset((data as u64 & 0x1) as isize);
     }
     let mut t_3: i32 = 0;
     while t_3 < num {
         let fresh20 = &mut (*(*ei.offset(t_3 as isize)).precomp).indexTable;
         *fresh20 = data;
-        data = data.offset(size[t_3 as usize][0 as i32 as usize][0 as i32 as usize] as isize);
+        data = data.offset(size[t_3 as usize][0][0] as isize);
         if split {
-            let fresh21 = &mut (*(*ei.offset((num + t_3) as isize)).precomp).indexTable;
-            *fresh21 = data;
-            data = data.offset(size[t_3 as usize][1 as i32 as usize][0 as i32 as usize] as isize);
+            (*(*ei.offset((num + t_3) as isize)).precomp).indexTable = data;
+            data = data.offset(size[t_3 as usize][1][0] as isize);
         }
         t_3 += 1;
     }
     let mut t_4: i32 = 0;
     while t_4 < num {
-        let fresh22 = &mut (*(*ei.offset(t_4 as isize)).precomp).sizeTable;
-        *fresh22 = data as *mut u16;
-        data = data.offset(size[t_4 as usize][0 as i32 as usize][1 as i32 as usize] as isize);
+        (*(*ei.offset(t_4 as isize)).precomp).sizeTable = data as *mut u16;
+        data = data.offset(size[t_4 as usize][0][1] as isize);
         if split {
-            let fresh23 = &mut (*(*ei.offset((num + t_4) as isize)).precomp).sizeTable;
-            *fresh23 = data as *mut u16;
-            data = data.offset(size[t_4 as usize][1 as i32 as usize][1 as i32 as usize] as isize);
+            (*(*ei.offset((num + t_4) as isize)).precomp).sizeTable = data as *mut u16;
+            data = data.offset(size[t_4 as usize][1][1] as isize);
         }
         t_4 += 1;
     }
     let mut t_5: i32 = 0;
     while t_5 < num {
-        data = ((data as u64).wrapping_add(0x3f as i32 as u64) & !(0x3f as i32) as u64) as *mut u8;
-        let fresh24 = &mut (*(*ei.offset(t_5 as isize)).precomp).data;
-        *fresh24 = data;
-        data = data.offset(size[t_5 as usize][0 as i32 as usize][2 as i32 as usize] as isize);
+        data = ((data as u64).wrapping_add(0x3f) & !(0x3f)) as *mut u8;
+        (*(*ei.offset(t_5 as isize)).precomp).data = data;
+        data = data.offset(size[t_5 as usize][0][2] as isize);
         if split {
-            data =
-                ((data as u64).wrapping_add(0x3f as i32 as u64) & !(0x3f as i32) as u64) as *mut u8;
-            let fresh25 = &mut (*(*ei.offset((num + t_5) as isize)).precomp).data;
-            *fresh25 = data;
-            data = data.offset(size[t_5 as usize][1 as i32 as usize][2 as i32 as usize] as isize);
+            data = ((data as u64).wrapping_add(0x3f) & !(0x3f)) as *mut u8;
+            (*(*ei.offset((num + t_5) as isize)).precomp).data = data;
+            data = data.offset(size[t_5 as usize][1][2] as isize);
         }
         t_5 += 1;
     }
     if type_0 == DTM as i32 && (*be).hasPawns as i32 != 0 {
-        (*(be as *mut PawnEntry)).dtmSwitched = pyrrhic_calc_key_from_pieces(
-            ((*ei.offset(0 as i32 as isize)).pieces).as_mut_ptr(),
-            (*be).num as i32,
-        ) != (*be).key;
+        (*(be as *mut PawnEntry)).dtmSwitched =
+            pyrrhic_calc_key_from_pieces(((*ei.offset(0)).pieces).as_mut_ptr(), (*be).num as i32)
+                != (*be).key;
     }
-    1 != 0
+    true
 }
 unsafe extern "C" fn decompress_pairs(mut d: *mut PairsData, mut idx: u64) -> *mut u8 {
     if (*d).idxBits == 0 {
