@@ -1,6 +1,6 @@
 use std::{
     ffi::CStr,
-    fs::File,
+    fs::{File, OpenOptions},
     sync::{
         atomic::{AtomicBool, Ordering},
         Mutex,
@@ -335,7 +335,8 @@ static mut initialized: i32 = 0;
 static mut numPaths: i32 = 0;
 static mut pathString: *mut i8 = 0 as *const i8 as *mut i8;
 static mut paths: *mut *mut i8 = 0 as *const *mut i8 as *mut *mut i8;
-unsafe extern "C" fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
+// unsafe extern "C" fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
+unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std::io::Error> {
     let mut i: i32 = 0;
     let mut fd: i32 = 0;
     let mut file: *mut i8 = std::ptr::null_mut::<i8>();
@@ -351,22 +352,30 @@ unsafe extern "C" fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
         strcat(file, b"/\0" as *const u8 as *const i8);
         strcat(file, str);
         strcat(file, suffix);
-        fd = open(file, 0);
+        // fd = open(file, 0);
+        let file_handle = OpenOptions::new()
+            .read(true)
+            .open(CStr::from_ptr(file).to_str().unwrap());
         free(file as *mut libc::c_void);
-        if fd != -(1) {
-            return fd;
+        // if fd != -(1) {
+        //     return fd;
+        // }
+        if file_handle.is_ok() {
+            return file_handle;
         }
         i += 1;
     }
-    -(1)
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "No tablebase files found",
+    ))
 }
-unsafe extern "C" fn close_tb(mut fd: i32) {
-    close(fd);
-}
+fn close_tb(_file_handle: File) {}
 fn open_tb_new(table_paths: &[&str], table_name: &str, table_type: TableType) -> File {
     todo!()
 }
-unsafe extern "C" fn map_file(mut fd: i32, mut mapping: *mut u64) -> *mut libc::c_void {
+unsafe extern "C" fn map_file(mut file: File, mut mapping: *mut u64) -> *mut libc::c_void {
+    let fd = file.as_raw_fd();
     let mut statbuf: stat = stat {
         st_dev: 0,
         st_ino: 0,
@@ -1340,43 +1349,35 @@ unsafe extern "C" fn prt_str(mut pos: *const PyrrhicPosition, mut str: *mut i8, 
     *fresh9 = 0;
 }
 unsafe extern "C" fn test_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
-    let mut fd: i32 = open_tb(str, suffix);
-    // let table_type = match CStr::from_ptr(suffix).to_str().unwrap() {
-    //     ".rbtw" => TableType::Wdl,
-    //     ".rbtz" => TableType::Dtz,
-    //     _ => unreachable!(),
-    // };
-    // let mut file = open_tb_new(CStr::from_ptr(str).to_str().unwrap(), table_type);
-    if fd != -(1) {
-        let mut size: u64 = file_size(fd);
-        close_tb(fd);
-        if size & 63 as i32 as u64 != 16 as i32 as u64 {
-            fprintf(
-                stderr,
-                b"Incomplete tablebase file %s.%s\n\0" as *const u8 as *const i8,
-                str,
-                suffix,
+    let mut file = open_tb(str, suffix);
+    if let Ok(file) = file {
+        let size = file.metadata().unwrap().len();
+        close_tb(file);
+        if size & 63 != 16 {
+            let file_path = format!(
+                "{}.{}",
+                CStr::from_ptr(str).to_str().unwrap(),
+                CStr::from_ptr(suffix).to_str().unwrap()
             );
-            printf(
-                b"info string Incomplete tablebase file %s.%s\n\0" as *const u8 as *const i8,
-                str,
-                suffix,
-            );
-            fd = -(1);
+            eprintln!("Incomplete tablebase file {file_path}");
+            println!("info string Incomplete tablebase file {file_path}");
+            return -1;
         }
+        1
+    } else {
+        -1
     }
-    (fd != -(1)) as i32
 }
 unsafe extern "C" fn map_tb(
     mut name: *const i8,
     mut suffix: *const i8,
     mut mapping: *mut u64,
 ) -> *mut libc::c_void {
-    let mut fd: i32 = open_tb(name, suffix);
-    if fd == -(1) {
+    let mut file = open_tb(name, suffix);
+    if file.is_err() {
         return std::ptr::null_mut::<libc::c_void>();
     }
-    let mut data: *mut libc::c_void = map_file(fd, mapping);
+    let mut data: *mut libc::c_void = map_file(file.unwrap(), mapping);
     if data.is_null() {
         fprintf(
             stderr,
@@ -1386,7 +1387,7 @@ unsafe extern "C" fn map_tb(
         );
         exit(1);
     }
-    close_tb(fd);
+    close_tb(file.unwrap());
     data
 }
 unsafe extern "C" fn add_to_hash(mut ptr: *mut BaseEntry, mut key: u64) {
