@@ -1,10 +1,8 @@
 use std::{
-    ffi::CStr,
-    fs::{File, OpenOptions},
-    sync::{
+    ffi::CStr, fs::{File, OpenOptions}, os::fd::AsRawFd, sync::{
         atomic::{AtomicBool, Ordering},
         Mutex,
-    },
+    }
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -37,8 +35,6 @@ extern "C" {
     fn strcat(_: *mut i8, _: *const i8) -> *mut i8;
     fn strcmp(_: *const i8, _: *const i8) -> i32;
     fn strlen(_: *const i8) -> u64;
-    fn open(__file: *const i8, __oflag: i32, _: ...) -> i32;
-    fn close(__fd: i32) -> i32;
     fn mmap(
         __addr: *mut libc::c_void,
         __len: u64,
@@ -338,7 +334,6 @@ static mut paths: *mut *mut i8 = 0 as *const *mut i8 as *mut *mut i8;
 // unsafe extern "C" fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
 unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std::io::Error> {
     let mut i: i32 = 0;
-    let mut fd: i32 = 0;
     let mut file: *mut i8 = std::ptr::null_mut::<i8>();
     i = 0;
     while i < numPaths {
@@ -352,14 +347,10 @@ unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std
         strcat(file, b"/\0" as *const u8 as *const i8);
         strcat(file, str);
         strcat(file, suffix);
-        // fd = open(file, 0);
         let file_handle = OpenOptions::new()
             .read(true)
             .open(CStr::from_ptr(file).to_str().unwrap());
         free(file as *mut libc::c_void);
-        // if fd != -(1) {
-        //     return fd;
-        // }
         if file_handle.is_ok() {
             return file_handle;
         }
@@ -374,7 +365,7 @@ fn close_tb(_file_handle: File) {}
 fn open_tb_new(table_paths: &[&str], table_name: &str, table_type: TableType) -> File {
     todo!()
 }
-unsafe extern "C" fn map_file(mut file: File, mut mapping: *mut u64) -> *mut libc::c_void {
+unsafe extern "C" fn map_file(mut file: &File, mut mapping: *mut u64) -> *mut libc::c_void {
     let fd = file.as_raw_fd();
     let mut statbuf: stat = stat {
         st_dev: 0,
@@ -398,7 +389,6 @@ unsafe extern "C" fn map_file(mut file: File, mut mapping: *mut u64) -> *mut lib
     };
     if fstat(fd, &mut statbuf) != 0 {
         perror(b"fstat\0" as *const u8 as *const i8);
-        close_tb(fd);
         return std::ptr::null_mut::<libc::c_void>();
     }
     *mapping = statbuf.st_size as u64;
@@ -1377,7 +1367,8 @@ unsafe extern "C" fn map_tb(
     if file.is_err() {
         return std::ptr::null_mut::<libc::c_void>();
     }
-    let mut data: *mut libc::c_void = map_file(file.unwrap(), mapping);
+    let file = file.unwrap();
+    let mut data: *mut libc::c_void = map_file(&file, mapping);
     if data.is_null() {
         fprintf(
             stderr,
@@ -1387,7 +1378,7 @@ unsafe extern "C" fn map_tb(
         );
         exit(1);
     }
-    close_tb(file.unwrap());
+    close_tb(file);
     data
 }
 unsafe extern "C" fn add_to_hash(mut ptr: *mut BaseEntry, mut key: u64) {
