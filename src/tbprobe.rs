@@ -1,8 +1,17 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
+use std::{
+    ffi::CStr,
+    fs::File,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
 };
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum TableType {
+    Wdl,
+    Dtz,
+}
 use ::libc;
 extern "C" {
     pub type _IO_wide_data;
@@ -354,6 +363,9 @@ unsafe extern "C" fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
 unsafe extern "C" fn close_tb(mut fd: i32) {
     close(fd);
 }
+fn open_tb_new(table_paths: &[&str], table_name: &str, table_type: TableType) -> File {
+    todo!()
+}
 unsafe extern "C" fn map_file(mut fd: i32, mut mapping: *mut u64) -> *mut libc::c_void {
     let mut statbuf: stat = stat {
         st_dev: 0,
@@ -420,7 +432,7 @@ static mut tbSuffix: [*const i8; 3] = [
     b".rtbm\0" as *const u8 as *const i8,
     b".rtbz\0" as *const u8 as *const i8,
 ];
-static mut tbMagic: [u32; 3] = [
+const TB_MAGIC: [u32; 3] = [
     0x5d23e871 as i32 as u32,
     0x88ac504b as u32,
     0xa50c66d7 as u32,
@@ -466,7 +478,7 @@ pub unsafe extern "C" fn pyrrhic_pawn_start_square(mut colour: i32, mut sq: i32)
     sq >> 3 as i32 == (if colour != 0 { 1 } else { 6 as i32 })
 }
 #[no_mangle]
-pub static mut pyrrhic_piece_to_char: [i8; 16] =
+pub static pyrrhic_piece_to_char: [i8; 16] =
     unsafe { *::core::mem::transmute::<&[u8; 16], &[i8; 16]>(b" PNBRQK  pnbrqk\0") };
 #[no_mangle]
 pub unsafe extern "C" fn pyrrhic_pieces_by_type(
@@ -624,28 +636,28 @@ pub unsafe extern "C" fn pyrrhic_calc_key_from_pcs(mut pieces: *mut i32, mut mir
 }
 #[no_mangle]
 pub unsafe extern "C" fn pyrrhic_calc_key_from_pieces(mut pieces: *mut u8, mut length: i32) -> u64 {
-    static mut PyrrhicPrimes: [u64; 16] = [
-        PYRRHIC_PRIME_NONE as i32 as u64,
-        PYRRHIC_PRIME_WPAWN as u64,
-        PYRRHIC_PRIME_WKNIGHT as u64,
-        PYRRHIC_PRIME_WBISHOP as u64,
-        PYRRHIC_PRIME_WROOK as u64,
-        PYRRHIC_PRIME_WQUEEN as u64,
-        PYRRHIC_PRIME_WKING as i32 as u64,
-        PYRRHIC_PRIME_NONE as i32 as u64,
-        PYRRHIC_PRIME_NONE as i32 as u64,
-        PYRRHIC_PRIME_BPAWN as u64,
-        PYRRHIC_PRIME_BKNIGHT as u64,
-        PYRRHIC_PRIME_BBISHOP as u64,
-        PYRRHIC_PRIME_BROOK as u64,
-        PYRRHIC_PRIME_BQUEEN as u64,
-        PYRRHIC_PRIME_BKING as i32 as u64,
-        PYRRHIC_PRIME_NONE as i32 as u64,
+    const PYRRHIC_PRIMES: [u64; 16] = [
+        PYRRHIC_PRIME_NONE,
+        PYRRHIC_PRIME_WPAWN,
+        PYRRHIC_PRIME_WKNIGHT,
+        PYRRHIC_PRIME_WBISHOP,
+        PYRRHIC_PRIME_WROOK,
+        PYRRHIC_PRIME_WQUEEN,
+        PYRRHIC_PRIME_WKING,
+        PYRRHIC_PRIME_NONE,
+        PYRRHIC_PRIME_NONE,
+        PYRRHIC_PRIME_BPAWN,
+        PYRRHIC_PRIME_BKNIGHT,
+        PYRRHIC_PRIME_BBISHOP,
+        PYRRHIC_PRIME_BROOK,
+        PYRRHIC_PRIME_BQUEEN,
+        PYRRHIC_PRIME_BKING,
+        PYRRHIC_PRIME_NONE,
     ];
     let mut key: u64 = 0;
     let mut i: i32 = 0;
     while i < length {
-        key = key.wrapping_add(PyrrhicPrimes[*pieces.offset(i as isize) as usize]);
+        key = key.wrapping_add(PYRRHIC_PRIMES[*pieces.offset(i as isize) as usize]);
         i += 1;
     }
     key
@@ -1329,6 +1341,12 @@ unsafe extern "C" fn prt_str(mut pos: *const PyrrhicPosition, mut str: *mut i8, 
 }
 unsafe extern "C" fn test_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
     let mut fd: i32 = open_tb(str, suffix);
+    // let table_type = match CStr::from_ptr(suffix).to_str().unwrap() {
+    //     ".rbtw" => TableType::Wdl,
+    //     ".rbtz" => TableType::Dtz,
+    //     _ => unreachable!(),
+    // };
+    // let mut file = open_tb_new(CStr::from_ptr(str).to_str().unwrap(), table_type);
     if fd != -(1) {
         let mut size: u64 = file_size(fd);
         close_tb(fd);
@@ -2580,7 +2598,7 @@ unsafe extern "C" fn init_table(
     if data.is_null() {
         return 0 != 0;
     }
-    if read_le_u32(data as *mut libc::c_void) != tbMagic[type_0 as usize] {
+    if read_le_u32(data as *mut libc::c_void) != TB_MAGIC[type_0 as usize] {
         fprintf(stderr, b"Corrupted table.\n\0" as *const u8 as *const i8);
         unmap_file(data as *mut libc::c_void, (*be).mapping[type_0 as usize]);
         return 0 != 0;
@@ -3246,7 +3264,7 @@ unsafe extern "C" fn probe_wdl(mut pos: *mut PyrrhicPosition, mut success: *mut 
     }
     v_0
 }
-static mut WdlToDtz: [i32; 5] = [-(1), -(101 as i32), 0, 101 as i32, 1];
+const WDL_TO_DTZ: [i32; 5] = [-1, -101, 0, 101, 1];
 unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut i32) -> i32 {
     let mut wdl: i32 = probe_wdl(pos, success);
     if *success == 0 {
@@ -3256,7 +3274,7 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
         return 0;
     }
     if *success == 2 as i32 {
-        return WdlToDtz[(wdl + 2 as i32) as usize];
+        return WDL_TO_DTZ[(wdl + 2 as i32) as usize];
     }
     let mut moves: [PyrrhicMove; 256] = [0; 256];
     let mut m: *mut PyrrhicMove = moves.as_mut_ptr();
@@ -3299,7 +3317,7 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
                             .as_ptr(),
                         );
                     };
-                    return WdlToDtz[(wdl + 2 as i32) as usize];
+                    return WDL_TO_DTZ[(wdl + 2 as i32) as usize];
                 }
             }
             m = m.offset(1);
@@ -3307,13 +3325,13 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
     }
     let mut dtz: i32 = probe_dtz_table(pos, wdl, success);
     if *success >= 0 {
-        return WdlToDtz[(wdl + 2 as i32) as usize] + (if wdl > 0 { dtz } else { -dtz });
+        return WDL_TO_DTZ[(wdl + 2 as i32) as usize] + (if wdl > 0 { dtz } else { -dtz });
     }
     let mut best: i32 = 0;
     if wdl > 0 {
         best = 2147483647 as i32;
     } else {
-        best = WdlToDtz[(wdl + 2 as i32) as usize];
+        best = WDL_TO_DTZ[(wdl + 2 as i32) as usize];
         end = pyrrhic_gen_moves(pos, m);
     }
     if !end.is_null() {
@@ -3407,7 +3425,7 @@ pub unsafe extern "C" fn root_probe_dtz(
                         .as_ptr(),
                 );
             };
-            v = WdlToDtz[(v + 2 as i32) as usize];
+            v = WDL_TO_DTZ[(v + 2 as i32) as usize];
         } else {
             v = -probe_dtz(&mut pos1, &mut success);
             if v > 0 {
@@ -3469,20 +3487,8 @@ pub unsafe extern "C" fn root_probe_wdl(
     mut useRule50: bool,
     mut rm: *mut TbRootMoves,
 ) -> i32 {
-    static mut WdlToRank: [i32; 5] = [
-        -(0x40000 as i32),
-        -(0x40000 as i32) + 101 as i32,
-        0,
-        0x40000 as i32 - 101 as i32,
-        0x40000 as i32,
-    ];
-    static mut WdlToValue: [i32; 5] = [
-        -(32000 as i32) + 255 as i32 + 1,
-        0 - 2 as i32,
-        0,
-        0 + 2 as i32,
-        32000 as i32 - 255 as i32 - 1,
-    ];
+    const WDL_TO_RANK: [i32; 5] = [-0x40000, -0x40000 + 101, 0, 0x40000 - 101, 0x40000];
+    const WDL_TO_VALUE: [i32; 5] = [-32000 + 255 + 1, 0 - 2, 0, 0 + 2, 32000 - 255 - 1];
     let mut v: i32 = 0;
     let mut success: i32 = 0;
     let mut moves: [PyrrhicMove; 256] = [0; 256];
@@ -3520,13 +3526,12 @@ pub unsafe extern "C" fn root_probe_wdl(
                 0
             };
         }
-        (*m).tbRank = WdlToRank[(v + 2 as i32) as usize];
-        (*m).tbScore = WdlToValue[(v + 2 as i32) as usize];
+        (*m).tbRank = WDL_TO_RANK[(v + 2 as i32) as usize];
+        (*m).tbScore = WDL_TO_VALUE[(v + 2 as i32) as usize];
         i = i.wrapping_add(1);
     }
     1
 }
-static mut wdl_to_dtz: [i32; 5] = [-1, -101, 0, 101, 1];
 unsafe extern "C" fn probe_root(
     mut pos: *mut PyrrhicPosition,
     mut score: *mut i32,
@@ -3574,7 +3579,7 @@ unsafe extern "C" fn probe_root(
                 }
             } else {
                 v = -probe_wdl(&mut pos1, &mut success);
-                v = wdl_to_dtz[(v + 2 as i32) as usize];
+                v = WDL_TO_DTZ[(v + 2 as i32) as usize];
             }
             num_draw = num_draw.wrapping_add((v == 0) as i32 as u64);
             if success == 0 {
