@@ -1,7 +1,6 @@
 use std::{
     ffi::CStr,
     fs::{File, OpenOptions},
-    os::fd::AsRawFd,
     sync::{
         atomic::{AtomicBool, Ordering},
         Mutex,
@@ -13,20 +12,7 @@ enum TableType {
     Wdl,
     Dtz,
 }
-use ::libc;
 extern "C" {
-    pub type _IO_wide_data;
-    pub type _IO_codecvt;
-    pub type _IO_marker;
-    fn __assert_fail(
-        __assertion: *const i8,
-        __file: *const i8,
-        __line: u32,
-        __function: *const i8,
-    ) -> !;
-    static mut stderr: *mut FILE;
-    fn fprintf(_: *mut FILE, _: *const i8, _: ...) -> i32;
-    fn printf(_: *const i8, _: ...) -> i32;
     fn snprintf(_: *mut i8, _: u64, _: *const i8, _: ...) -> i32;
     fn perror(__s: *const i8);
     fn malloc(_: u64) -> *mut libc::c_void;
@@ -38,52 +24,8 @@ extern "C" {
     fn strcat(_: *mut i8, _: *const i8) -> *mut i8;
     fn strcmp(_: *const i8, _: *const i8) -> i32;
     fn strlen(_: *const i8) -> u64;
-    fn mmap(
-        __addr: *mut libc::c_void,
-        __len: u64,
-        __prot: i32,
-        __flags: i32,
-        __fd: i32,
-        __offset: i64,
-    ) -> *mut libc::c_void;
-    fn munmap(__addr: *mut libc::c_void, __len: u64) -> i32;
-    fn fstat(__fd: i32, __buf: *mut stat) -> i32;
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct _IO_FILE {
-    pub _flags: i32,
-    pub _IO_read_ptr: *mut i8,
-    pub _IO_read_end: *mut i8,
-    pub _IO_read_base: *mut i8,
-    pub _IO_write_base: *mut i8,
-    pub _IO_write_ptr: *mut i8,
-    pub _IO_write_end: *mut i8,
-    pub _IO_buf_base: *mut i8,
-    pub _IO_buf_end: *mut i8,
-    pub _IO_save_base: *mut i8,
-    pub _IO_backup_base: *mut i8,
-    pub _IO_save_end: *mut i8,
-    pub _markers: *mut _IO_marker,
-    pub _chain: *mut _IO_FILE,
-    pub _fileno: i32,
-    pub _flags2: i32,
-    pub _old_offset: i64,
-    pub _cur_column: libc::c_ushort,
-    pub _vtable_offset: libc::c_schar,
-    pub _shortbuf: [i8; 1],
-    pub _lock: *mut libc::c_void,
-    pub _offset: i64,
-    pub _codecvt: *mut _IO_codecvt,
-    pub _wide_data: *mut _IO_wide_data,
-    pub _freeres_list: *mut _IO_FILE,
-    pub _freeres_buf: *mut libc::c_void,
-    pub __pad5: u64,
-    pub _mode: i32,
-    pub _unused2: [i8; 20],
-}
-pub type FILE = _IO_FILE;
 pub const PYRRHIC_PRIME_BPAWN: u64 = 11695583624105689831;
 pub const PYRRHIC_BPAWN: u32 = 9;
 pub const PYRRHIC_PRIME_BKNIGHT: u64 = 13469005675588064321;
@@ -108,7 +50,7 @@ pub const PYRRHIC_WQUEEN: u32 = 5;
 #[repr(C)]
 pub struct BaseEntry {
     pub key: u64,
-    pub data: [*mut u8; 3],
+    pub data: [*mut Mmap; 3],
     pub mapping: [u64; 3],
     pub ready: [AtomicBool; 3],
     pub num: u8,
@@ -263,6 +205,7 @@ pub fn poplsb(mut x: &mut u64) -> u64 {
 }
 
 use cozy_chess::*;
+use memmap2::{Mmap, MmapOptions};
 pub fn pawnAttacks(c: u64, sq: u64) -> u64 {
     let attacks = get_pawn_attacks(
         Square::index(sq as usize),
@@ -302,33 +245,6 @@ unsafe extern "C" fn read_le_u16(mut p: *mut libc::c_void) -> u16 {
     let le_u16 = (p as *mut u16).read_unaligned();
     u16::from_le(le_u16)
 }
-unsafe extern "C" fn file_size(mut fd: i32) -> u64 {
-    let mut buf: stat = stat {
-        st_dev: 0,
-        st_ino: 0,
-        st_nlink: 0,
-        st_mode: 0,
-        st_uid: 0,
-        st_gid: 0,
-        __pad0: 0,
-        st_rdev: 0,
-        st_size: 0,
-        st_blksize: 0,
-        st_blocks: 0,
-        st_atime: 0,
-        st_atimensec: 0,
-        st_mtime: 0,
-        st_mtimensec: 0,
-        st_ctime: 0,
-        st_ctimensec: 0,
-        __glibc_reserved: [0; 3],
-    };
-    if fstat(fd, &mut buf) != 0 {
-        0
-    } else {
-        buf.st_size as u64
-    }
-}
 static TB_MUTEX: Mutex<()> = Mutex::new(());
 static mut initialized: i32 = 0;
 static mut numPaths: i32 = 0;
@@ -365,57 +281,20 @@ unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std
     ))
 }
 fn close_tb(_file_handle: File) {}
-fn open_tb_new(table_paths: &[&str], table_name: &str, table_type: TableType) -> File {
-    todo!()
+unsafe extern "C" fn map_file(file: &File, mapping: *mut u64) -> *mut Mmap {
+    let file_size = file.metadata().unwrap().len();
+    *mapping = file_size;
+    let mut mmap = MmapOptions::new().map(file).expect("Failed to mmap file");
+    // leak the mmap onto the heap to be dropped later
+    let mmap_ptr = Box::new(mmap);
+    Box::leak(mmap_ptr) as *mut Mmap
 }
-unsafe extern "C" fn map_file(mut file: &File, mut mapping: *mut u64) -> *mut libc::c_void {
-    let fd = file.as_raw_fd();
-    let mut statbuf: stat = stat {
-        st_dev: 0,
-        st_ino: 0,
-        st_nlink: 0,
-        st_mode: 0,
-        st_uid: 0,
-        st_gid: 0,
-        __pad0: 0,
-        st_rdev: 0,
-        st_size: 0,
-        st_blksize: 0,
-        st_blocks: 0,
-        st_atime: 0,
-        st_atimensec: 0,
-        st_mtime: 0,
-        st_mtimensec: 0,
-        st_ctime: 0,
-        st_ctimensec: 0,
-        __glibc_reserved: [0; 3],
-    };
-    if fstat(fd, &mut statbuf) != 0 {
-        perror(b"fstat\0" as *const u8 as *const i8);
-        return std::ptr::null_mut::<libc::c_void>();
-    }
-    *mapping = statbuf.st_size as u64;
-    let mut data: *mut libc::c_void = mmap(
-        std::ptr::null_mut::<libc::c_void>(),
-        statbuf.st_size as u64,
-        0x1 as i32,
-        0x1 as i32,
-        fd,
-        0,
-    );
-    if data == -1isize as *mut libc::c_void {
-        perror(b"mmap\0" as *const u8 as *const i8);
-        return std::ptr::null_mut::<libc::c_void>();
-    }
-    data
-}
-unsafe extern "C" fn unmap_file(mut data: *mut libc::c_void, mut size: u64) {
+unsafe extern "C" fn unmap_file(data: *mut Mmap, _size: u64) {
     if data.is_null() {
         return;
     }
-    if munmap(data, size) < 0 {
-        perror(b"munmap\0" as *const u8 as *const i8);
-    }
+    let mmap_ptr = Box::from_raw(data);
+    drop(mmap_ptr);
 }
 #[no_mangle]
 pub static mut TB_MaxCardinality: i32 = 0;
@@ -488,30 +367,8 @@ pub unsafe extern "C" fn pyrrhic_pieces_by_type(
     mut colour: i32,
     mut piece: i32,
 ) -> u64 {
-    if PYRRHIC_PAWN as i32 <= piece && piece <= PYRRHIC_KING as i32 {
-    } else {
-        __assert_fail(
-            b"PYRRHIC_PAWN <= piece && piece <= PYRRHIC_KING\0" as *const u8 as *const i8,
-            b"./tbchess.c\0" as *const u8 as *const i8,
-            94 as i32 as u32,
-            (*::core::mem::transmute::<&[u8; 67], &[i8; 67]>(
-                b"uint64_t pyrrhic_pieces_by_type(const PyrrhicPosition *, int, int)\0",
-            ))
-            .as_ptr(),
-        );
-    };
-    if colour == PYRRHIC_WHITE as i32 || colour == PYRRHIC_BLACK as i32 {
-    } else {
-        __assert_fail(
-            b"colour == PYRRHIC_WHITE || colour == PYRRHIC_BLACK\0" as *const u8 as *const i8,
-            b"./tbchess.c\0" as *const u8 as *const i8,
-            95 as i32 as u32,
-            (*::core::mem::transmute::<&[u8; 67], &[i8; 67]>(
-                b"uint64_t pyrrhic_pieces_by_type(const PyrrhicPosition *, int, int)\0",
-            ))
-            .as_ptr(),
-        );
-    };
+    assert!(PYRRHIC_PAWN as i32 <= piece && piece <= PYRRHIC_KING as i32);
+    assert!(colour == PYRRHIC_WHITE as i32 || colour == PYRRHIC_BLACK as i32);
     let mut side: u64 = if colour == PYRRHIC_WHITE as i32 {
         (*pos).white
     } else {
@@ -524,21 +381,7 @@ pub unsafe extern "C" fn pyrrhic_pieces_by_type(
         4 => (*pos).rooks & side,
         5 => (*pos).queens & side,
         6 => (*pos).kings & side,
-        _ => {
-            if 0 != 0 {
-            } else {
-                __assert_fail(
-                    b"0\0" as *const u8 as *const i8,
-                    b"./tbchess.c\0" as *const u8 as *const i8,
-                    106 as i32 as u32,
-                    (*::core::mem::transmute::<&[u8; 67], &[i8; 67]>(
-                        b"uint64_t pyrrhic_pieces_by_type(const PyrrhicPosition *, int, int)\0",
-                    ))
-                    .as_ptr(),
-                );
-            };
-            0
-        }
+        _ => unreachable!(),
     }
 }
 #[no_mangle]
@@ -1365,22 +1208,14 @@ unsafe extern "C" fn map_tb(
     mut name: *const i8,
     mut suffix: *const i8,
     mut mapping: *mut u64,
-) -> *mut libc::c_void {
+) -> *mut Mmap {
     let mut file = open_tb(name, suffix);
     if file.is_err() {
-        return std::ptr::null_mut::<libc::c_void>();
+        return std::ptr::null_mut();
     }
     let file = file.unwrap();
-    let mut data: *mut libc::c_void = map_file(&file, mapping);
-    if data.is_null() {
-        fprintf(
-            stderr,
-            b"Could not map %s%s into memory.\n\0" as *const u8 as *const i8,
-            name,
-            suffix,
-        );
-        exit(1);
-    }
+    let mut data = map_file(&file, mapping);
+
     close_tb(file);
     data
 }
@@ -1424,18 +1259,7 @@ unsafe extern "C" fn init_tb(mut str: *mut i8) {
         } else {
             let mut piece_type: i32 = pyrrhic_char_to_piece_type(*s);
             if piece_type != 0 {
-                if piece_type | color < 16 as i32 {
-                } else {
-                    __assert_fail(
-                        b"(piece_type | color) < 16\0" as *const u8 as *const i8,
-                        b"tbprobe.c\0" as *const u8 as *const i8,
-                        550 as i32 as u32,
-                        (*::core::mem::transmute::<&[u8; 21], &[i8; 21]>(
-                            b"void init_tb(char *)\0",
-                        ))
-                        .as_ptr(),
-                    );
-                };
+                assert!(piece_type | color < 16);
                 pcs[(piece_type | color) as usize] += 1;
                 pcs[(piece_type | color) as usize];
             }
@@ -1546,10 +1370,7 @@ unsafe extern "C" fn free_tb_entry(mut be: *mut BaseEntry) {
     let mut type_0: i32 = 0;
     while type_0 < 3 as i32 {
         if (*be).ready[type_0 as usize].load(Ordering::Relaxed) {
-            unmap_file(
-                (*be).data[type_0 as usize] as *mut libc::c_void,
-                (*be).mapping[type_0 as usize],
-            );
+            unmap_file((*be).data[type_0 as usize], (*be).mapping[type_0 as usize]);
             let mut num: i32 = num_tables(be, type_0);
             let mut ei: *mut EncInfo = first_ei(be, type_0);
             let mut t: i32 = 0;
@@ -1653,7 +1474,7 @@ pub unsafe extern "C" fn tb_init(mut path: *const i8) -> bool {
                 .wrapping_mul(::core::mem::size_of::<PawnEntry>() as u64),
         ) as *mut PawnEntry;
         if pieceEntry.is_null() || pawnEntry.is_null() {
-            fprintf(stderr, b"Out of memory.\n\0" as *const u8 as *const i8);
+            eprintln!("Out of memory");
             exit(1);
         }
     }
@@ -2536,18 +2357,7 @@ unsafe extern "C" fn setup_pairs(
     *size.offset(0 as i32 as isize) = (6 as u64).wrapping_mul(num_indices as u64) as u64;
     *size.offset(1 as isize) = (2 as u64).wrapping_mul(numBlocks as u64) as u64;
     *size.offset(2 as i32 as isize) = (realNumBlocks as u64) << blockSize as i32;
-    if numSyms < 4096 as i32 as u32 {
-    } else {
-        __assert_fail(
-            b"numSyms < TB_MAX_SYMS\0" as *const u8 as *const i8,
-            b"tbprobe.c\0" as *const u8 as *const i8,
-            1273 as i32 as u32,
-            (*::core::mem::transmute::<&[u8; 76], &[i8; 76]>(
-                b"struct PairsData *setup_pairs(uint8_t **, size_t, size_t *, uint8_t *, int)\0",
-            ))
-            .as_ptr(),
-        );
-    };
+    assert!(numSyms < 4096);
     let mut tmp: [i8; 4096] = [0; 4096];
     memset(tmp.as_mut_ptr() as *mut libc::c_void, 0, numSyms as u64);
     let mut s: u32 = 0;
@@ -2581,22 +2391,24 @@ unsafe extern "C" fn setup_pairs(
     d
 }
 unsafe extern "C" fn init_table(be: *mut BaseEntry, str: *const i8, type_0: i32) -> bool {
-    let mut data = map_tb(
+    let mut mmap = map_tb(
         str,
         tbSuffix[type_0 as usize],
         &mut *((*be).mapping).as_mut_ptr().offset(type_0 as isize),
-    ) as *mut u8;
-    if data.is_null() {
+    );
+    if mmap.is_null() {
         return false;
     }
+
+    let mut data = (*mmap).as_ptr() as *mut u8;
 
     if read_le_u32(data as *mut libc::c_void) != TB_MAGIC[type_0 as usize] {
-        fprintf(stderr, b"Corrupted table.\n\0" as *const u8 as *const i8);
-        unmap_file(data as *mut libc::c_void, (*be).mapping[type_0 as usize]);
+        eprintln!("Corrupted table");
+        unmap_file(mmap, (*be).mapping[type_0 as usize]);
         return false;
     }
 
-    (*be).data[type_0 as usize] = data;
+    (*be).data[type_0 as usize] = mmap;
     let split: bool = type_0 != DTZ as i32 && *data.offset(4) as i32 & 0x1 != 0;
     if type_0 == DTM as i32 {
         (*be).dtmLossOnly = *data.offset(4) as i32 & 0x4 != 0;
@@ -3099,18 +2911,7 @@ unsafe extern "C" fn probe_ab(
     mut beta: i32,
     mut success: *mut i32,
 ) -> i32 {
-    if (*pos).ep as i32 == 0 {
-    } else {
-        __assert_fail(
-            b"pos->ep == 0\0" as *const u8 as *const i8,
-            b"tbprobe.c\0" as *const u8 as *const i8,
-            1665 as i32 as u32,
-            (*::core::mem::transmute::<&[u8; 55], &[i8; 55]>(
-                b"int probe_ab(const PyrrhicPosition *, int, int, int *)\0",
-            ))
-            .as_ptr(),
-        );
-    };
+    assert!((*pos).ep == 0);
     let mut moves0: [PyrrhicMove; 64] = [0; 64];
     let mut m: *mut PyrrhicMove = moves0.as_mut_ptr();
     let mut end: *mut PyrrhicMove = pyrrhic_gen_captures(pos, m);
@@ -3264,18 +3065,7 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
                     return 0;
                 }
                 if v == wdl {
-                    if wdl < 3 as i32 {
-                    } else {
-                        __assert_fail(
-                            b"wdl < 3\0" as *const u8 as *const i8,
-                            b"tbprobe.c\0" as *const u8 as *const i8,
-                            1852 as i32 as u32,
-                            (*::core::mem::transmute::<&[u8; 40], &[i8; 40]>(
-                                b"int probe_dtz(PyrrhicPosition *, int *)\0",
-                            ))
-                            .as_ptr(),
-                        );
-                    };
+                    assert!(wdl < 3);
                     return WDL_TO_DTZ[(wdl + 2 as i32) as usize];
                 }
             }
@@ -3293,18 +3083,7 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
         best = WDL_TO_DTZ[(wdl + 2 as i32) as usize];
         end = pyrrhic_gen_moves(pos, m);
     }
-    if !end.is_null() {
-    } else {
-        __assert_fail(
-            b"end != NULL\0" as *const u8 as *const i8,
-            b"tbprobe.c\0" as *const u8 as *const i8,
-            1879 as i32 as u32,
-            (*::core::mem::transmute::<&[u8; 40], &[i8; 40]>(
-                b"int probe_dtz(PyrrhicPosition *, int *)\0",
-            ))
-            .as_ptr(),
-        );
-    };
+    assert!(!end.is_null());
     m = moves.as_mut_ptr();
     while m < end {
         let mut move_1: PyrrhicMove = *m;
@@ -3369,21 +3148,7 @@ pub unsafe extern "C" fn root_probe_dtz(
         pyrrhic_do_move(&mut pos1, pos, (*m).move_0);
         if pos1.rule50 as i32 == 0 {
             v = -probe_wdl(&mut pos1, &mut success);
-            if v < 3 as i32 {
-            } else {
-                __assert_fail(
-                    b"v < 3\0" as *const u8 as *const i8,
-                    b"tbprobe.c\0" as *const u8 as *const i8,
-                    1935 as i32 as u32,
-                    (*::core::mem::transmute::<
-                        &[u8; 80],
-                        &[i8; 80],
-                    >(
-                        b"int root_probe_dtz(const PyrrhicPosition *, _Bool, _Bool, struct TbRootMoves *)\0",
-                    ))
-                        .as_ptr(),
-                );
-            };
+            assert!(v < 3);
             v = WDL_TO_DTZ[(v + 2 as i32) as usize];
         } else {
             v = -probe_dtz(&mut pos1, &mut success);
