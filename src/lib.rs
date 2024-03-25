@@ -8,6 +8,7 @@
 #![feature(extern_types)]
 
 extern crate libc;
+pub mod engine_adapter;
 pub mod tbprobe;
 
 #[cfg(test)]

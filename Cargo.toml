@@ -11,8 +11,10 @@ autobins = false
 [lib]
 name = "pyrrhic_rs"
 crate-type = ["staticlib", "rlib"]
+
 [dependencies]
-cozy-chess = "0.3.3"
 libc = "0.2"
 memmap2 = "0.9.4"
 
+[dev-dependencies]
+cozy-chess = "0.3.3"

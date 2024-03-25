@@ -198,41 +198,22 @@ pub struct TbRootMoves {
 }
 pub const PYRRHIC_BKING: u32 = 14;
 pub const PYRRHIC_WKING: u32 = 6;
-pub fn poplsb(mut x: &mut u64) -> u64 {
+pub fn poplsb(x: &mut u64) -> u64 {
     let lsb = x.trailing_zeros();
     *x &= x.wrapping_sub(1);
     lsb as u64
 }
 
-use cozy_chess::*;
 use memmap2::{Mmap, MmapOptions};
-pub fn pawnAttacks(c: u64, sq: u64) -> u64 {
-    let attacks = get_pawn_attacks(
-        Square::index(sq as usize),
-        if c == 0 { Color::Black } else { Color::White },
-    );
-    attacks.0
-}
-pub fn knightAttacks(sq: u64) -> u64 {
-    get_knight_moves(Square::index(sq as usize)).0
-}
+
+use crate::engine_adapter::{Color, EngineAdapter};
+
 pub fn popcount(x: u64) -> u64 {
     x.count_ones() as u64
 }
-pub fn bishopAttacks(sq: u64, occ: u64) -> u64 {
-    get_bishop_moves(Square::index(sq as usize), BitBoard(occ)).0
-}
+
 pub fn getlsb(x: u64) -> u64 {
     x.trailing_zeros() as u64
-}
-pub fn rookAttacks(sq: u64, occ: u64) -> u64 {
-    get_rook_moves(Square::index(sq as usize), BitBoard(occ)).0
-}
-pub fn kingAttacks(sq: u64) -> u64 {
-    get_king_moves(Square::index(sq as usize)).0
-}
-pub fn queenAttacks(sq: u64, occ: u64) -> u64 {
-    bishopAttacks(sq, occ) | rookAttacks(sq, occ)
 }
 
 #[inline]
@@ -296,17 +277,17 @@ unsafe extern "C" fn unmap_file(data: *mut Mmap, _size: u64) {
     let mmap_ptr = Box::from_raw(data);
     drop(mmap_ptr);
 }
-#[no_mangle]
+
 pub static mut TB_MaxCardinality: i32 = 0;
-#[no_mangle]
+
 pub static mut TB_MaxCardinalityDTM: i32 = 0;
-#[no_mangle]
+
 pub static mut TB_LARGEST: i32 = 0;
-#[no_mangle]
+
 pub static mut TB_NUM_WDL: i32 = 0;
-#[no_mangle]
+
 pub static mut TB_NUM_DTM: i32 = 0;
-#[no_mangle]
+
 pub static mut TB_NUM_DTZ: i32 = 0;
 static mut tbSuffix: [*const i8; 3] = [
     b".rtbw\0" as *const u8 as *const i8,
@@ -314,50 +295,50 @@ static mut tbSuffix: [*const i8; 3] = [
     b".rtbz\0" as *const u8 as *const i8,
 ];
 const TB_MAGIC: [u32; 3] = [0x5d23e871, 0x88ac504b, 0xa50c66d7];
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_move_from(move_0: PyrrhicMove) -> u32 {
     (move_0 as i32 >> 6 & 0x3f) as u32
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_move_to(move_0: PyrrhicMove) -> u32 {
     (move_0 & 0x3f) as u32
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_move_promotes(move_0: PyrrhicMove) -> u32 {
     (move_0 as i32 >> 12 & 0x7) as u32
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_colour_of_piece(piece: u8) -> i32 {
     (piece as i32 >> 3 == 0) as i32
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_type_of_piece(piece: u8) -> i32 {
     piece as i32 & 0x7
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_test_bit(bb: u64, sq: i32) -> bool {
     bb >> sq & 0x1 != 0
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_enable_bit(b: &mut u64, sq: i32) {
     *b |= 1 << sq;
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_disable_bit(b: &mut u64, sq: i32) {
     *b &= !(1 << sq);
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_promo_square(sq: i32) -> bool {
     PYRRHIC_PROMOSQS >> sq & 0x1 != 0
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_pawn_start_square(colour: i32, sq: i32) -> bool {
     sq >> 3 == (if colour != 0 { 1 } else { 6 })
 }
-#[no_mangle]
+
 pub static pyrrhic_piece_to_char: [i8; 16] =
     unsafe { *::core::mem::transmute::<&[u8; 16], &[i8; 16]>(b" PNBRQK  pnbrqk\0") };
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_pieces_by_type(
     pos: *const PyrrhicPosition,
     colour: i32,
@@ -380,7 +361,7 @@ pub unsafe extern "C" fn pyrrhic_pieces_by_type(
         _ => unreachable!(),
     }
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_char_to_piece_type(c: i8) -> i32 {
     let mut i: i32 = PYRRHIC_PAWN as i32;
     while i <= PYRRHIC_KING as i32 {
@@ -391,7 +372,7 @@ pub extern "C" fn pyrrhic_char_to_piece_type(c: i8) -> i32 {
     }
     0
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_calc_key(pos: *const PyrrhicPosition, mirror: i32) -> u64 {
     let mut white: u64 = if mirror != 0 {
         (*pos).black
@@ -415,7 +396,7 @@ pub unsafe extern "C" fn pyrrhic_calc_key(pos: *const PyrrhicPosition, mirror: i
         .wrapping_add((popcount(black & (*pos).knights)).wrapping_mul(PYRRHIC_PRIME_BKNIGHT))
         .wrapping_add((popcount(black & (*pos).pawns)).wrapping_mul(PYRRHIC_PRIME_BPAWN))
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_calc_key_from_pcs(pieces: *mut i32, mirror: i32) -> u64 {
     (*pieces.offset((PYRRHIC_WQUEEN as i32 ^ (if mirror != 0 { 8 } else { 0 })) as isize) as u64)
         .wrapping_mul(PYRRHIC_PRIME_WQUEEN)
@@ -465,7 +446,7 @@ pub unsafe extern "C" fn pyrrhic_calc_key_from_pcs(pieces: *mut i32, mirror: i32
                 .wrapping_mul(PYRRHIC_PRIME_BPAWN),
         )
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_calc_key_from_pieces(pieces: *mut u8, length: i32) -> u64 {
     const PYRRHIC_PRIMES: [u64; 16] = [
         PYRRHIC_PRIME_NONE,
@@ -493,15 +474,15 @@ pub unsafe extern "C" fn pyrrhic_calc_key_from_pieces(pieces: *mut u8, length: i
     }
     key
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_do_bb_move(bb: u64, from: u32, to: u32) -> u64 {
     ((bb >> from & 0x1) << to) | bb & (!(1 << from) & !(1 << to))
 }
-#[no_mangle]
+
 pub extern "C" fn pyrrhic_make_move(promote: u32, from: u32, to: u32) -> PyrrhicMove {
     ((promote & 0x7) << 12 | (from & 0x3f) << 6 | to & 0x3f) as PyrrhicMove
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_add_move(
     mut moves: *mut PyrrhicMove,
     promotes: i32,
@@ -528,8 +509,8 @@ pub unsafe extern "C" fn pyrrhic_add_move(
     }
     moves
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_gen_captures(
+
+pub unsafe extern "C" fn pyrrhic_gen_captures<E: EngineAdapter>(
     pos: *const PyrrhicPosition,
     mut moves: *mut PyrrhicMove,
 ) -> *mut PyrrhicMove {
@@ -547,7 +528,7 @@ pub unsafe extern "C" fn pyrrhic_gen_captures(
     let mut att: u64 = 0;
     b = us & (*pos).kings;
     while b != 0 {
-        att = kingAttacks(getlsb(b)) & them;
+        att = E::king_attacks(getlsb(b)) & them;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -556,7 +537,7 @@ pub unsafe extern "C" fn pyrrhic_gen_captures(
     }
     b = us & ((*pos).rooks | (*pos).queens);
     while b != 0 {
-        att = rookAttacks(getlsb(b), us | them) & them;
+        att = E::rook_attacks(getlsb(b), us | them) & them;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -565,7 +546,7 @@ pub unsafe extern "C" fn pyrrhic_gen_captures(
     }
     b = us & ((*pos).bishops | (*pos).queens);
     while b != 0 {
-        att = bishopAttacks(getlsb(b), us | them) & them;
+        att = E::bishop_attacks(getlsb(b), us | them) & them;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -574,7 +555,7 @@ pub unsafe extern "C" fn pyrrhic_gen_captures(
     }
     b = us & (*pos).knights;
     while b != 0 {
-        att = knightAttacks(getlsb(b)) & them;
+        att = E::knight_attacks(getlsb(b)) & them;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -585,14 +566,28 @@ pub unsafe extern "C" fn pyrrhic_gen_captures(
     while b != 0 {
         if (*pos).ep as i32 != 0
             && pyrrhic_test_bit(
-                pawnAttacks(!(*pos).turn as u64, getlsb(b)),
+                E::pawn_attacks(
+                    if (*pos).turn {
+                        Color::White
+                    } else {
+                        Color::Black
+                    },
+                    getlsb(b),
+                ),
                 (*pos).ep as i32,
             ) as i32
                 != 0
         {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, (*pos).ep as u32);
         }
-        att = pawnAttacks(!(*pos).turn as i32 as u64, getlsb(b)) & them;
+        att = E::pawn_attacks(
+            if (*pos).turn {
+                Color::White
+            } else {
+                Color::Black
+            },
+            getlsb(b),
+        ) & them;
         while att != 0 {
             moves = pyrrhic_add_move(
                 moves,
@@ -606,16 +601,16 @@ pub unsafe extern "C" fn pyrrhic_gen_captures(
     }
     moves
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_gen_moves(
+
+pub unsafe extern "C" fn pyrrhic_gen_moves<E: EngineAdapter>(
     pos: *const PyrrhicPosition,
     mut moves: *mut PyrrhicMove,
 ) -> *mut PyrrhicMove {
-    let Forward: u32 = (if (*pos).turn as i32 == PYRRHIC_WHITE as i32 {
+    let Forward: i32 = (if (*pos).turn as i32 == PYRRHIC_WHITE as i32 {
         8
     } else {
         -8
-    }) as u32;
+    }) as i32;
     let mut us: u64 = if (*pos).turn {
         (*pos).white
     } else {
@@ -630,7 +625,7 @@ pub unsafe extern "C" fn pyrrhic_gen_moves(
     let mut att: u64 = 0;
     b = us & (*pos).kings;
     while b != 0 {
-        att = kingAttacks(getlsb(b)) & !us;
+        att = E::king_attacks(getlsb(b)) & !us;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -639,7 +634,7 @@ pub unsafe extern "C" fn pyrrhic_gen_moves(
     }
     b = us & ((*pos).rooks | (*pos).queens);
     while b != 0 {
-        att = rookAttacks(getlsb(b), us | them) & !us;
+        att = E::rook_attacks(getlsb(b), us | them) & !us;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -648,7 +643,7 @@ pub unsafe extern "C" fn pyrrhic_gen_moves(
     }
     b = us & ((*pos).bishops | (*pos).queens);
     while b != 0 {
-        att = bishopAttacks(getlsb(b), us | them) & !us;
+        att = E::bishop_attacks(getlsb(b), us | them) & !us;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -657,7 +652,7 @@ pub unsafe extern "C" fn pyrrhic_gen_moves(
     }
     b = us & (*pos).knights;
     while b != 0 {
-        att = knightAttacks(getlsb(b)) & !us;
+        att = E::knight_attacks(getlsb(b)) & !us;
         while att != 0 {
             moves = pyrrhic_add_move(moves, 0, getlsb(b) as u32, getlsb(att) as u32);
             poplsb(&mut att);
@@ -669,36 +664,50 @@ pub unsafe extern "C" fn pyrrhic_gen_moves(
         let mut from: u32 = getlsb(b) as u32;
         if (*pos).ep as i32 != 0
             && pyrrhic_test_bit(
-                pawnAttacks(!(*pos).turn as i32 as u64, from as u64),
+                E::pawn_attacks(
+                    if (*pos).turn {
+                        Color::White
+                    } else {
+                        Color::Black
+                    },
+                    from as u64,
+                ),
                 (*pos).ep as i32,
             ) as i32
                 != 0
         {
             moves = pyrrhic_add_move(moves, 0, from, (*pos).ep as u32);
         }
-        if !pyrrhic_test_bit(us | them, from.wrapping_add(Forward) as i32) {
+        if !pyrrhic_test_bit(us | them, (from as i32).wrapping_add(Forward)) {
             moves = pyrrhic_add_move(
                 moves,
-                pyrrhic_promo_square(from.wrapping_add(Forward) as i32) as i32,
+                pyrrhic_promo_square((from as i32).wrapping_add(Forward)) as i32,
                 from,
-                from.wrapping_add(Forward),
+                (from as i32).wrapping_add(Forward) as u32,
             );
         }
         if pyrrhic_pawn_start_square((*pos).turn as i32, from as i32) as i32 != 0
-            && !pyrrhic_test_bit(us | them, from.wrapping_add(Forward) as i32)
+            && !pyrrhic_test_bit(us | them, (from as i32).wrapping_add(Forward))
             && !pyrrhic_test_bit(
                 us | them,
-                from.wrapping_add(2u32.wrapping_mul(Forward)) as i32,
+                (from as i32).wrapping_add(2i32.wrapping_mul(Forward)),
             )
         {
             moves = pyrrhic_add_move(
                 moves,
                 0,
                 from,
-                from.wrapping_add(2u32.wrapping_mul(Forward)),
+                (from as i32).wrapping_add(2i32.wrapping_mul(Forward)) as u32,
             );
         }
-        att = pawnAttacks(!(*pos).turn as i32 as u64, from as u64) & them;
+        att = E::pawn_attacks(
+            if (*pos).turn {
+                Color::White
+            } else {
+                Color::Black
+            },
+            from as u64,
+        ) & them;
         while att != 0 {
             moves = pyrrhic_add_move(
                 moves,
@@ -712,17 +721,17 @@ pub unsafe extern "C" fn pyrrhic_gen_moves(
     }
     moves
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_gen_legal(
+
+pub unsafe extern "C" fn pyrrhic_gen_legal<E: EngineAdapter>(
     pos: *const PyrrhicPosition,
     moves: *mut PyrrhicMove,
 ) -> *mut PyrrhicMove {
     let mut _moves: [PyrrhicMove; 256] = [0; 256];
-    let mut end: *mut PyrrhicMove = pyrrhic_gen_moves(pos, _moves.as_mut_ptr());
+    let mut end: *mut PyrrhicMove = pyrrhic_gen_moves::<E>(pos, _moves.as_mut_ptr());
     let mut results: *mut PyrrhicMove = moves;
     let mut m: *mut PyrrhicMove = _moves.as_mut_ptr();
     while m < end {
-        if pyrrhic_legal_move(pos, *m) {
+        if pyrrhic_legal_move::<E>(pos, *m) {
             let fresh5 = results;
             results = results.offset(1);
             *fresh5 = *m;
@@ -731,7 +740,7 @@ pub unsafe extern "C" fn pyrrhic_gen_legal(
     }
     results
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_is_pawn_move(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
@@ -743,7 +752,7 @@ pub unsafe extern "C" fn pyrrhic_is_pawn_move(
     };
     pyrrhic_test_bit(us & (*pos).pawns, pyrrhic_move_from(move_0) as i32)
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_is_en_passant(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
@@ -752,7 +761,7 @@ pub unsafe extern "C" fn pyrrhic_is_en_passant(
         && pyrrhic_move_to(move_0) == (*pos).ep as u32
         && (*pos).ep as i32 != 0
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn pyrrhic_is_capture(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
@@ -765,8 +774,10 @@ pub unsafe extern "C" fn pyrrhic_is_capture(
     pyrrhic_test_bit(them, pyrrhic_move_to(move_0) as i32) as i32 != 0
         || pyrrhic_is_en_passant(pos, move_0) as i32 != 0
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_is_legal(mut pos: *const PyrrhicPosition) -> bool {
+
+pub unsafe extern "C" fn pyrrhic_is_legal<E: EngineAdapter>(
+    mut pos: *const PyrrhicPosition,
+) -> bool {
     let mut us: u64 = if (*pos).turn as i32 != 0 {
         (*pos).black
     } else {
@@ -778,14 +789,25 @@ pub unsafe extern "C" fn pyrrhic_is_legal(mut pos: *const PyrrhicPosition) -> bo
         (*pos).black
     };
     let mut sq: u32 = getlsb((*pos).kings & us) as u32;
-    kingAttacks(sq as u64) & (*pos).kings & them == 0
-        && rookAttacks(sq as u64, us | them) & ((*pos).rooks | (*pos).queens) & them == 0
-        && bishopAttacks(sq as u64, us | them) & ((*pos).bishops | (*pos).queens) & them == 0
-        && knightAttacks(sq as u64) & (*pos).knights & them == 0
-        && pawnAttacks((*pos).turn as i32 as u64, sq as u64) & (*pos).pawns & them == 0
+    E::king_attacks(sq as u64) & (*pos).kings & them == 0
+        && E::rook_attacks(sq as u64, us | them) & ((*pos).rooks | (*pos).queens) & them == 0
+        && E::bishop_attacks(sq as u64, us | them) & ((*pos).bishops | (*pos).queens) & them == 0
+        && E::knight_attacks(sq as u64) & (*pos).knights & them == 0
+        && E::pawn_attacks(
+            if (*pos).turn {
+                Color::Black
+            } else {
+                Color::White
+            },
+            sq as u64,
+        ) & (*pos).pawns
+            & them
+            == 0
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_is_check(mut pos: *const PyrrhicPosition) -> bool {
+
+pub unsafe extern "C" fn pyrrhic_is_check<E: EngineAdapter>(
+    mut pos: *const PyrrhicPosition,
+) -> bool {
     let mut us: u64 = if (*pos).turn as i32 != 0 {
         (*pos).white
     } else {
@@ -797,14 +819,24 @@ pub unsafe extern "C" fn pyrrhic_is_check(mut pos: *const PyrrhicPosition) -> bo
         (*pos).white
     };
     let mut sq: u32 = getlsb((*pos).kings & us) as u32;
-    rookAttacks(sq as u64, us | them) & (((*pos).rooks | (*pos).queens) & them) != 0
-        || bishopAttacks(sq as u64, us | them) & (((*pos).bishops | (*pos).queens) & them) != 0
-        || knightAttacks(sq as u64) & ((*pos).knights & them) != 0
-        || pawnAttacks(!(*pos).turn as i32 as u64, sq as u64) & ((*pos).pawns & them) != 0
+    E::rook_attacks(sq as u64, us | them) & (((*pos).rooks | (*pos).queens) & them) != 0
+        || E::bishop_attacks(sq as u64, us | them) & (((*pos).bishops | (*pos).queens) & them) != 0
+        || E::knight_attacks(sq as u64) & ((*pos).knights & them) != 0
+        || E::pawn_attacks(
+            if (*pos).turn {
+                Color::White
+            } else {
+                Color::Black
+            },
+            sq as u64,
+        ) & ((*pos).pawns & them)
+            != 0
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_is_mate(mut pos: *const PyrrhicPosition) -> bool {
-    if !pyrrhic_is_check(pos) {
+
+pub unsafe extern "C" fn pyrrhic_is_mate<E: EngineAdapter>(
+    mut pos: *const PyrrhicPosition,
+) -> bool {
+    if !pyrrhic_is_check::<E>(pos) {
         return 0 != 0;
     }
     let mut pos1: PyrrhicPosition = PyrrhicPosition {
@@ -822,17 +854,17 @@ pub unsafe extern "C" fn pyrrhic_is_mate(mut pos: *const PyrrhicPosition) -> boo
     };
     let mut moves0: [PyrrhicMove; 256] = [0; 256];
     let mut moves: *mut PyrrhicMove = moves0.as_mut_ptr();
-    let mut end: *mut PyrrhicMove = pyrrhic_gen_moves(pos, moves);
+    let mut end: *mut PyrrhicMove = pyrrhic_gen_moves::<E>(pos, moves);
     while moves < end {
-        if pyrrhic_do_move(&mut pos1, pos, *moves) {
+        if pyrrhic_do_move::<E>(&mut pos1, pos, *moves) {
             return 0 != 0;
         }
         moves = moves.offset(1);
     }
     1 != 0
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_do_move(
+
+pub unsafe extern "C" fn pyrrhic_do_move<E: EngineAdapter>(
     mut pos: *mut PyrrhicPosition,
     mut pos0: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
@@ -872,10 +904,8 @@ pub unsafe extern "C" fn pyrrhic_do_move(
         (*pos).rule50 = 0;
         if from ^ to == 16
             && (*pos0).turn as i32 == PYRRHIC_WHITE as i32
-            && pawnAttacks(
-                (PYRRHIC_WHITE as i32 == 0) as i32 as u64,
-                from.wrapping_add(8) as u64,
-            ) & (*pos0).pawns
+            && E::pawn_attacks(Color::Black, from.wrapping_add(8) as u64)
+                & (*pos0).pawns
                 & (*pos0).black
                 != 0
         {
@@ -883,10 +913,8 @@ pub unsafe extern "C" fn pyrrhic_do_move(
         }
         if from ^ to == 16
             && (*pos0).turn as i32 == PYRRHIC_BLACK as i32
-            && pawnAttacks(
-                (PYRRHIC_BLACK as i32 == 0) as i32 as u64,
-                from.wrapping_sub(8) as u64,
-            ) & (*pos0).pawns
+            && E::pawn_attacks(Color::White, from.wrapping_sub(8) as u64)
+                & (*pos0).pawns
                 & (*pos0).white
                 != 0
         {
@@ -922,10 +950,10 @@ pub unsafe extern "C" fn pyrrhic_do_move(
     } else {
         (*pos).rule50 = ((*pos0).rule50 as i32 + 1) as u8;
     }
-    pyrrhic_is_legal(pos)
+    pyrrhic_is_legal::<E>(pos)
 }
-#[no_mangle]
-pub unsafe extern "C" fn pyrrhic_legal_move(
+
+pub unsafe extern "C" fn pyrrhic_legal_move<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
 ) -> bool {
@@ -942,7 +970,7 @@ pub unsafe extern "C" fn pyrrhic_legal_move(
         ep: 0,
         turn: false,
     };
-    pyrrhic_do_move(&mut pos1, pos, move_0)
+    pyrrhic_do_move::<E>(&mut pos1, pos, move_0)
 }
 static mut tbNumPiece: i32 = 0;
 static mut tbNumPawn: i32 = 0;
@@ -968,8 +996,7 @@ unsafe extern "C" fn dtz_to_wdl(mut cnt50: i32, mut dtz: i32) -> u32 {
     }
     (wdl + 2) as u32
 }
-#[no_mangle]
-pub unsafe extern "C" fn tb_probe_wdl(
+pub unsafe extern "C" fn tb_probe_wdl<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -997,14 +1024,13 @@ pub unsafe extern "C" fn tb_probe_wdl(
         }
     };
     let mut success: i32 = 0;
-    let mut v: i32 = probe_wdl(&mut pos, &mut success);
+    let mut v: i32 = probe_wdl::<E>(&mut pos, &mut success);
     if success == 0 {
         return 0xffffffff;
     }
     (v + 2) as u32
 }
-#[no_mangle]
-pub unsafe extern "C" fn tb_probe_root(
+pub unsafe extern "C" fn tb_probe_root<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -1034,7 +1060,7 @@ pub unsafe extern "C" fn tb_probe_root(
         }
     };
     let mut dtz: i32 = 0;
-    let mut move_0: PyrrhicMove = probe_root(&mut pos, &mut dtz, results);
+    let mut move_0: PyrrhicMove = probe_root::<E>(&mut pos, &mut dtz, results);
     if move_0 as i32 == 0 {
         return 0xffffffff;
     }
@@ -1053,8 +1079,7 @@ pub unsafe extern "C" fn tb_probe_root(
     res = res & !0x80000 | ((pyrrhic_is_en_passant(&pos, move_0) as i32) << 19 & 0x80000) as u32;
     res
 }
-#[no_mangle]
-pub unsafe extern "C" fn tb_probe_root_dtz(
+pub unsafe extern "C" fn tb_probe_root_dtz<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -1085,10 +1110,10 @@ pub unsafe extern "C" fn tb_probe_root_dtz(
             turn,
         }
     };
-    root_probe_dtz(&pos, hasRepeated, useRule50, results)
+    root_probe_dtz::<E>(&pos, hasRepeated, useRule50, results)
 }
-#[no_mangle]
-pub unsafe extern "C" fn tb_probe_root_wdl(
+
+pub unsafe extern "C" fn tb_probe_root_wdl<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -1118,7 +1143,7 @@ pub unsafe extern "C" fn tb_probe_root_wdl(
             turn,
         }
     };
-    root_probe_wdl(&pos, useRule50, results)
+    root_probe_wdl::<E>(&pos, useRule50, results)
 }
 unsafe extern "C" fn prt_str(mut pos: *const PyrrhicPosition, mut str: *mut i8, mut flip: i32) {
     let mut color: i32 = if flip != 0 {
@@ -1286,7 +1311,7 @@ unsafe extern "C" fn init_tb(mut str: *mut i8) {
         add_to_hash(be, key2);
     }
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn num_tables(be: *mut BaseEntry, type_0: i32) -> i32 {
     if (*be).hasPawns as i32 != 0 {
         if type_0 == DTM as i32 {
@@ -1298,7 +1323,7 @@ pub unsafe extern "C" fn num_tables(be: *mut BaseEntry, type_0: i32) -> i32 {
         1
     }
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn first_ei(be: *mut BaseEntry, type_0: i32) -> *mut EncInfo {
     if (*be).hasPawns as i32 != 0 {
         &mut *((*(be as *mut PawnEntry)).ei).as_mut_ptr().offset(
@@ -1342,7 +1367,7 @@ unsafe extern "C" fn free_tb_entry(be: *mut BaseEntry) {
         type_0 += 1;
     }
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn tb_init(path: *const i8) -> bool {
     if initialized == 0 {
         init_indices();
@@ -1701,7 +1726,7 @@ pub unsafe extern "C" fn tb_init(path: *const i8) -> bool {
     TB_NUM_DTM = numDtm;
     1 != 0
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn tb_free() {
     tb_init(b"\0" as *const u8 as *const i8);
     free(pieceEntry as *mut libc::c_void);
@@ -1984,7 +2009,7 @@ unsafe extern "C" fn init_indices() {
         i += 1;
     }
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn leading_pawn(mut p: *mut i32, mut be: *mut BaseEntry, enc: i32) -> i32 {
     let mut i: i32 = 1;
     while i < (*be).c2rust_unnamed.pawns[0] as i32 {
@@ -2003,7 +2028,7 @@ pub unsafe extern "C" fn leading_pawn(mut p: *mut i32, mut be: *mut BaseEntry, e
         (*p.offset(0) - 8) >> 3
     }
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn encode(
     mut p: *mut i32,
     mut ei: *mut EncInfo,
@@ -2697,7 +2722,7 @@ unsafe extern "C" fn fill_squares(
     }
     i
 }
-#[no_mangle]
+
 pub unsafe extern "C" fn probe_table(
     mut pos: *const PyrrhicPosition,
     mut s: i32,
@@ -2892,7 +2917,7 @@ unsafe extern "C" fn probe_dtz_table(
 ) -> i32 {
     probe_table(pos, wdl, success, DTZ as i32)
 }
-unsafe extern "C" fn probe_ab(
+unsafe extern "C" fn probe_ab<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut alpha: i32,
     mut beta: i32,
@@ -2901,7 +2926,7 @@ unsafe extern "C" fn probe_ab(
     assert!((*pos).ep == 0);
     let mut moves0: [PyrrhicMove; 64] = [0; 64];
     let mut m: *mut PyrrhicMove = moves0.as_mut_ptr();
-    let mut end: *mut PyrrhicMove = pyrrhic_gen_captures(pos, m);
+    let mut end: *mut PyrrhicMove = pyrrhic_gen_captures::<E>(pos, m);
     while m < end {
         let mut pos1: PyrrhicPosition = PyrrhicPosition {
             white: 0,
@@ -2917,8 +2942,8 @@ unsafe extern "C" fn probe_ab(
             turn: false,
         };
         let mut move_0: PyrrhicMove = *m;
-        if pyrrhic_is_capture(pos, move_0) && pyrrhic_do_move(&mut pos1, pos, move_0) {
-            let mut v: i32 = -probe_ab(&pos1, -beta, -alpha, success);
+        if pyrrhic_is_capture(pos, move_0) && pyrrhic_do_move::<E>(&mut pos1, pos, move_0) {
+            let mut v: i32 = -probe_ab::<E>(&pos1, -beta, -alpha, success);
             if *success == 0 {
                 return 0;
             }
@@ -2938,11 +2963,14 @@ unsafe extern "C" fn probe_ab(
         v_0
     }
 }
-unsafe extern "C" fn probe_wdl(mut pos: *mut PyrrhicPosition, mut success: *mut i32) -> i32 {
+unsafe extern "C" fn probe_wdl<E: EngineAdapter>(
+    mut pos: *mut PyrrhicPosition,
+    mut success: *mut i32,
+) -> i32 {
     *success = 1;
     let mut moves0: [PyrrhicMove; 64] = [0; 64];
     let mut m: *mut PyrrhicMove = moves0.as_mut_ptr();
-    let mut end: *mut PyrrhicMove = pyrrhic_gen_captures(pos, m);
+    let mut end: *mut PyrrhicMove = pyrrhic_gen_captures::<E>(pos, m);
     let mut bestCap: i32 = -3;
     let mut bestEp: i32 = -3;
     while m < end {
@@ -2960,8 +2988,8 @@ unsafe extern "C" fn probe_wdl(mut pos: *mut PyrrhicPosition, mut success: *mut 
             turn: false,
         };
         let mut move_0: PyrrhicMove = *m;
-        if pyrrhic_is_capture(pos, move_0) && pyrrhic_do_move(&mut pos1, pos, move_0) {
-            let mut v: i32 = -probe_ab(&pos1, -2, -bestCap, success);
+        if pyrrhic_is_capture(pos, move_0) && pyrrhic_do_move::<E>(&mut pos1, pos, move_0) {
+            let mut v: i32 = -probe_ab::<E>(&pos1, -2, -bestCap, success);
             if *success == 0 {
                 return 0;
             }
@@ -2996,15 +3024,15 @@ unsafe extern "C" fn probe_wdl(mut pos: *mut PyrrhicPosition, mut success: *mut 
     }
     if bestEp > -3 && v_0 == 0 {
         let mut moves: [PyrrhicMove; 256] = [0; 256];
-        let mut end2: *mut PyrrhicMove = pyrrhic_gen_moves(pos, moves.as_mut_ptr());
+        let mut end2: *mut PyrrhicMove = pyrrhic_gen_moves::<E>(pos, moves.as_mut_ptr());
         m = moves.as_mut_ptr();
         while m < end2 {
-            if !pyrrhic_is_en_passant(pos, *m) && pyrrhic_legal_move(pos, *m) as i32 != 0 {
+            if !pyrrhic_is_en_passant(pos, *m) && pyrrhic_legal_move::<E>(pos, *m) as i32 != 0 {
                 break;
             }
             m = m.offset(1);
         }
-        if m == end2 && !pyrrhic_is_check(pos) {
+        if m == end2 && !pyrrhic_is_check::<E>(pos) {
             *success = 2;
             return bestEp;
         }
@@ -3012,8 +3040,11 @@ unsafe extern "C" fn probe_wdl(mut pos: *mut PyrrhicPosition, mut success: *mut 
     v_0
 }
 const WDL_TO_DTZ: [i32; 5] = [-1, -101, 0, 101, 1];
-unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut i32) -> i32 {
-    let mut wdl: i32 = probe_wdl(pos, success);
+unsafe extern "C" fn probe_dtz<E: EngineAdapter>(
+    mut pos: *mut PyrrhicPosition,
+    mut success: *mut i32,
+) -> i32 {
+    let mut wdl: i32 = probe_wdl::<E>(pos, success);
     if *success == 0 {
         return 0;
     }
@@ -3040,14 +3071,14 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
         turn: false,
     };
     if wdl > 0 {
-        end = pyrrhic_gen_legal(pos, moves.as_mut_ptr());
+        end = pyrrhic_gen_legal::<E>(pos, moves.as_mut_ptr());
         m = moves.as_mut_ptr();
         while m < end {
             let mut move_0: PyrrhicMove = *m;
             if !(!pyrrhic_is_pawn_move(pos, move_0) || pyrrhic_is_capture(pos, move_0) as i32 != 0)
-                && pyrrhic_do_move(&mut pos1, pos, move_0)
+                && pyrrhic_do_move::<E>(&mut pos1, pos, move_0)
             {
-                let mut v: i32 = -probe_wdl(&mut pos1, success);
+                let mut v: i32 = -probe_wdl::<E>(&mut pos1, success);
                 if *success == 0 {
                     return 0;
                 }
@@ -3068,7 +3099,7 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
         best = 2147483647;
     } else {
         best = WDL_TO_DTZ[(wdl + 2) as usize];
-        end = pyrrhic_gen_moves(pos, m);
+        end = pyrrhic_gen_moves::<E>(pos, m);
     }
     assert!(!end.is_null());
     m = moves.as_mut_ptr();
@@ -3076,10 +3107,10 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
         let mut move_1: PyrrhicMove = *m;
         if !(pyrrhic_is_capture(pos, move_1) as i32 != 0
             || pyrrhic_is_pawn_move(pos, move_1) as i32 != 0)
-            && pyrrhic_do_move(&mut pos1, pos, move_1)
+            && pyrrhic_do_move::<E>(&mut pos1, pos, move_1)
         {
-            let mut v_0: i32 = -probe_dtz(&mut pos1, success);
-            if v_0 == 1 && pyrrhic_is_mate(&pos1) as i32 != 0 {
+            let mut v_0: i32 = -probe_dtz::<E>(&mut pos1, success);
+            if v_0 == 1 && pyrrhic_is_mate::<E>(&pos1) as i32 != 0 {
                 best = 1;
             } else if wdl > 0 {
                 if v_0 > 0 && (v_0 + 1) < best {
@@ -3096,8 +3127,8 @@ unsafe extern "C" fn probe_dtz(mut pos: *mut PyrrhicPosition, mut success: *mut 
     }
     best
 }
-#[no_mangle]
-pub unsafe extern "C" fn root_probe_dtz(
+
+pub unsafe extern "C" fn root_probe_dtz<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut hasRepeated: bool,
     mut useRule50: bool,
@@ -3112,7 +3143,7 @@ pub unsafe extern "C" fn root_probe_dtz(
         1
     };
     let mut rootMoves: [PyrrhicMove; 256] = [0; 256];
-    let mut end: *mut PyrrhicMove = pyrrhic_gen_legal(pos, rootMoves.as_mut_ptr());
+    let mut end: *mut PyrrhicMove = pyrrhic_gen_legal::<E>(pos, rootMoves.as_mut_ptr());
     (*rm).size = end.offset_from(rootMoves.as_mut_ptr()) as i64 as u32;
     let mut pos1: PyrrhicPosition = PyrrhicPosition {
         white: 0,
@@ -3132,36 +3163,36 @@ pub unsafe extern "C" fn root_probe_dtz(
         let mut m: *mut TbRootMove =
             &mut *((*rm).moves).as_mut_ptr().offset(i as isize) as *mut TbRootMove;
         (*m).move_0 = rootMoves[i as usize];
-        pyrrhic_do_move(&mut pos1, pos, (*m).move_0);
+        pyrrhic_do_move::<E>(&mut pos1, pos, (*m).move_0);
         if pos1.rule50 as i32 == 0 {
-            v = -probe_wdl(&mut pos1, &mut success);
+            v = -probe_wdl::<E>(&mut pos1, &mut success);
             assert!(v < 3);
             v = WDL_TO_DTZ[(v + 2) as usize];
         } else {
-            v = -probe_dtz(&mut pos1, &mut success);
+            v = -probe_dtz::<E>(&mut pos1, &mut success);
             if v > 0 {
                 v += 1;
             } else if v < 0 {
                 v -= 1;
             }
         }
-        if v == 2 && pyrrhic_is_mate(&pos1) as i32 != 0 {
+        if v == 2 && pyrrhic_is_mate::<E>(&pos1) as i32 != 0 {
             v = 1;
         }
         if success == 0 {
             return 0;
         }
         let mut r: i32 = if v > 0 {
-            if v + cnt50 <= 99 as i32 && !hasRepeated {
-                0x40000 as i32
+            if v + cnt50 <= 99 && !hasRepeated {
+                0x40000
             } else {
-                0x40000 as i32 - (v + cnt50)
+                0x40000 - (v + cnt50)
             }
         } else if v < 0 {
-            if -v * 2 as i32 + cnt50 < 100 as i32 {
-                -(0x40000 as i32)
+            if -v * 2 + cnt50 < 100 {
+                -(0x40000)
             } else {
-                -(0x40000 as i32) + (-v + cnt50)
+                -(0x40000) + (-v + cnt50)
             }
         } else {
             0
@@ -3192,8 +3223,8 @@ pub unsafe extern "C" fn root_probe_dtz(
     }
     1
 }
-#[no_mangle]
-pub unsafe extern "C" fn root_probe_wdl(
+
+pub unsafe extern "C" fn root_probe_wdl<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut useRule50: bool,
     mut rm: *mut TbRootMoves,
@@ -3203,7 +3234,7 @@ pub unsafe extern "C" fn root_probe_wdl(
     let mut v: i32 = 0;
     let mut success: i32 = 0;
     let mut moves: [PyrrhicMove; 256] = [0; 256];
-    let mut end: *mut PyrrhicMove = pyrrhic_gen_legal(pos, moves.as_mut_ptr());
+    let mut end: *mut PyrrhicMove = pyrrhic_gen_legal::<E>(pos, moves.as_mut_ptr());
     (*rm).size = end.offset_from(moves.as_mut_ptr()) as i64 as u32;
     let mut pos1: PyrrhicPosition = PyrrhicPosition {
         white: 0,
@@ -3223,8 +3254,8 @@ pub unsafe extern "C" fn root_probe_wdl(
         let mut m: *mut TbRootMove =
             &mut *((*rm).moves).as_mut_ptr().offset(i as isize) as *mut TbRootMove;
         (*m).move_0 = moves[i as usize];
-        pyrrhic_do_move(&mut pos1, pos, (*m).move_0);
-        v = -probe_wdl(&mut pos1, &mut success);
+        pyrrhic_do_move::<E>(&mut pos1, pos, (*m).move_0);
+        v = -probe_wdl::<E>(&mut pos1, &mut success);
         if success == 0 {
             return 0;
         }
@@ -3243,20 +3274,20 @@ pub unsafe extern "C" fn root_probe_wdl(
     }
     1
 }
-unsafe extern "C" fn probe_root(
+unsafe extern "C" fn probe_root<E: EngineAdapter>(
     mut pos: *mut PyrrhicPosition,
     mut score: *mut i32,
     mut results: *mut u32,
 ) -> u16 {
     let mut success: i32 = 0;
-    let mut dtz: i32 = probe_dtz(pos, &mut success);
+    let mut dtz: i32 = probe_dtz::<E>(pos, &mut success);
     if success == 0 {
         return 0;
     }
     let mut scores: [i16; 256] = [0; 256];
     let mut moves0: [u16; 256] = [0; 256];
     let mut moves: *mut u16 = moves0.as_mut_ptr();
-    let mut end: *mut u16 = pyrrhic_gen_moves(pos, moves);
+    let mut end: *mut u16 = pyrrhic_gen_moves::<E>(pos, moves);
     let mut len: u64 = end.offset_from(moves) as i64 as u64;
     let mut num_draw: u64 = 0;
     let mut j: u32 = 0;
@@ -3275,21 +3306,21 @@ unsafe extern "C" fn probe_root(
             ep: 0,
             turn: false,
         };
-        if !pyrrhic_do_move(&mut pos1, pos, *moves.offset(i as isize)) {
+        if !pyrrhic_do_move::<E>(&mut pos1, pos, *moves.offset(i as isize)) {
             scores[i as usize] = 0x7fff;
         } else {
             let mut v: i32 = 0;
-            if dtz > 0 && pyrrhic_is_mate(&pos1) as i32 != 0 {
+            if dtz > 0 && pyrrhic_is_mate::<E>(&pos1) as i32 != 0 {
                 v = 1;
             } else if pos1.rule50 as i32 != 0 {
-                v = -probe_dtz(&mut pos1, &mut success);
+                v = -probe_dtz::<E>(&mut pos1, &mut success);
                 if v > 0 {
                     v += 1;
                 } else if v < 0 {
                     v -= 1;
                 }
             } else {
-                v = -probe_wdl(&mut pos1, &mut success);
+                v = -probe_wdl::<E>(&mut pos1, &mut success);
                 v = WDL_TO_DTZ[(v + 2) as usize];
             }
             num_draw = num_draw.wrapping_add((v == 0) as i32 as u64);
@@ -3319,13 +3350,13 @@ unsafe extern "C" fn probe_root(
     if !results.is_null() {
         let fresh30 = j;
         j = j.wrapping_add(1);
-        *results.offset(fresh30 as isize) = 0xffffffff ;
+        *results.offset(fresh30 as isize) = 0xffffffff;
     }
     if !score.is_null() {
         *score = dtz;
     }
     if dtz > 0 {
-        let mut best: i32 = 0xffff ;
+        let mut best: i32 = 0xffff;
         let mut best_move: u16 = 0;
         let mut i_0: u32 = 0;
         while (i_0 as u64) < len {
