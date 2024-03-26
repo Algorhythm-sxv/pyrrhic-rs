@@ -26,179 +26,179 @@ extern "C" {
     fn strlen(_: *const i8) -> u64;
 }
 
-pub const PYRRHIC_PRIME_BPAWN: u64 = 11695583624105689831;
-pub const PYRRHIC_BPAWN: u32 = 9;
-pub const PYRRHIC_PRIME_BKNIGHT: u64 = 13469005675588064321;
-pub const PYRRHIC_BKNIGHT: u32 = 10;
-pub const PYRRHIC_PRIME_BBISHOP: u64 = 15394650811035483107;
-pub const PYRRHIC_BBISHOP: u32 = 11;
-pub const PYRRHIC_PRIME_BROOK: u64 = 18264461213049635989;
-pub const PYRRHIC_BROOK: u32 = 12;
-pub const PYRRHIC_PRIME_BQUEEN: u64 = 15484752644942473553;
-pub const PYRRHIC_BQUEEN: u32 = 13;
-pub const PYRRHIC_PRIME_WPAWN: u64 = 17008651141875982339;
-pub const PYRRHIC_WPAWN: u32 = 1;
-pub const PYRRHIC_PRIME_WKNIGHT: u64 = 15202887380319082783;
-pub const PYRRHIC_WKNIGHT: u32 = 2;
-pub const PYRRHIC_PRIME_WBISHOP: u64 = 12311744257139811149;
-pub const PYRRHIC_WBISHOP: u32 = 3;
-pub const PYRRHIC_PRIME_WROOK: u64 = 10979190538029446137;
-pub const PYRRHIC_WROOK: u32 = 4;
-pub const PYRRHIC_PRIME_WQUEEN: u64 = 11811845319353239651;
-pub const PYRRHIC_WQUEEN: u32 = 5;
+pub(crate) const PYRRHIC_PRIME_BPAWN: u64 = 11695583624105689831;
+pub(crate) const PYRRHIC_BPAWN: u32 = 9;
+pub(crate) const PYRRHIC_PRIME_BKNIGHT: u64 = 13469005675588064321;
+pub(crate) const PYRRHIC_BKNIGHT: u32 = 10;
+pub(crate) const PYRRHIC_PRIME_BBISHOP: u64 = 15394650811035483107;
+pub(crate) const PYRRHIC_BBISHOP: u32 = 11;
+pub(crate) const PYRRHIC_PRIME_BROOK: u64 = 18264461213049635989;
+pub(crate) const PYRRHIC_BROOK: u32 = 12;
+pub(crate) const PYRRHIC_PRIME_BQUEEN: u64 = 15484752644942473553;
+pub(crate) const PYRRHIC_BQUEEN: u32 = 13;
+pub(crate) const PYRRHIC_PRIME_WPAWN: u64 = 17008651141875982339;
+pub(crate) const PYRRHIC_WPAWN: u32 = 1;
+pub(crate) const PYRRHIC_PRIME_WKNIGHT: u64 = 15202887380319082783;
+pub(crate) const PYRRHIC_WKNIGHT: u32 = 2;
+pub(crate) const PYRRHIC_PRIME_WBISHOP: u64 = 12311744257139811149;
+pub(crate) const PYRRHIC_WBISHOP: u32 = 3;
+pub(crate) const PYRRHIC_PRIME_WROOK: u64 = 10979190538029446137;
+pub(crate) const PYRRHIC_WROOK: u32 = 4;
+pub(crate) const PYRRHIC_PRIME_WQUEEN: u64 = 11811845319353239651;
+pub(crate) const PYRRHIC_WQUEEN: u32 = 5;
 
 #[repr(C)]
-pub struct BaseEntry {
-    pub key: u64,
-    pub data: [*mut Mmap; 3],
-    pub mapping: [u64; 3],
-    pub ready: [AtomicBool; 3],
-    pub num: u8,
-    pub symmetric: bool,
-    pub hasPawns: bool,
-    pub hasDtm: bool,
-    pub hasDtz: bool,
-    pub c2rust_unnamed: C2RustUnnamed_0,
-    pub dtmLossOnly: bool,
+pub(crate) struct BaseEntry {
+    pub(crate) key: u64,
+    pub(crate) data: [*mut Mmap; 3],
+    pub(crate) mapping: [u64; 3],
+    pub(crate) ready: [AtomicBool; 3],
+    pub(crate) num: u8,
+    pub(crate) symmetric: bool,
+    pub(crate) hasPawns: bool,
+    pub(crate) hasDtm: bool,
+    pub(crate) hasDtz: bool,
+    pub(crate) c2rust_unnamed: C2RustUnnamed_0,
+    pub(crate) dtmLossOnly: bool,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union C2RustUnnamed_0 {
-    pub kk_enc: bool,
-    pub pawns: [u8; 2],
-}
-
-#[repr(C)]
-pub struct PieceEntry {
-    pub be: BaseEntry,
-    pub ei: [EncInfo; 5],
-    pub dtmMap: *mut u16,
-    pub dtmMapIdx: [[u16; 2]; 2],
-    pub dtzMap: *mut libc::c_void,
-    pub dtzMapIdx: [u16; 4],
-    pub dtzFlags: u8,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct EncInfo {
-    pub precomp: *mut PairsData,
-    pub factor: [u64; 7],
-    pub pieces: [u8; 7],
-    pub norm: [u8; 7],
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct PairsData {
-    pub indexTable: *mut u8,
-    pub sizeTable: *mut u16,
-    pub data: *mut u8,
-    pub offset: *mut u16,
-    pub symLen: *mut u8,
-    pub symPat: *mut u8,
-    pub blockSize: u8,
-    pub idxBits: u8,
-    pub minLen: u8,
-    pub constValue: [u8; 2],
-    pub base: [u64; 1],
+pub(crate) union C2RustUnnamed_0 {
+    pub(crate) kk_enc: bool,
+    pub(crate) pawns: [u8; 2],
 }
 
 #[repr(C)]
-pub struct PawnEntry {
-    pub be: BaseEntry,
-    pub ei: [EncInfo; 24],
-    pub dtmMap: *mut u16,
-    pub dtmMapIdx: [[[u16; 2]; 2]; 6],
-    pub dtzMap: *mut libc::c_void,
-    pub dtzMapIdx: [[u16; 4]; 4],
-    pub dtzFlags: [u8; 4],
-    pub dtmSwitched: bool,
+pub(crate) struct PieceEntry {
+    pub(crate) be: BaseEntry,
+    pub(crate) ei: [EncInfo; 5],
+    pub(crate) dtmMap: *mut u16,
+    pub(crate) dtmMapIdx: [[u16; 2]; 2],
+    pub(crate) dtzMap: *mut libc::c_void,
+    pub(crate) dtzMapIdx: [u16; 4],
+    pub(crate) dtzFlags: u8,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct TbHashEntry {
-    pub key: u64,
-    pub ptr: *mut BaseEntry,
+pub(crate) struct EncInfo {
+    pub(crate) precomp: *mut PairsData,
+    pub(crate) factor: [u64; 7],
+    pub(crate) pieces: [u8; 7],
+    pub(crate) norm: [u8; 7],
 }
-pub const DTZ: u32 = 2;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct stat {
-    pub st_dev: u64,
-    pub st_ino: u64,
-    pub st_nlink: u64,
-    pub st_mode: u32,
-    pub st_uid: u32,
-    pub st_gid: u32,
-    pub __pad0: i32,
-    pub st_rdev: u64,
-    pub st_size: i64,
-    pub st_blksize: i64,
-    pub st_blocks: i64,
-    pub st_atime: i64,
-    pub st_atimensec: u64,
-    pub st_mtime: i64,
-    pub st_mtimensec: u64,
-    pub st_ctime: i64,
-    pub st_ctimensec: u64,
-    pub __glibc_reserved: [i64; 3],
+pub(crate) struct PairsData {
+    pub(crate) indexTable: *mut u8,
+    pub(crate) sizeTable: *mut u16,
+    pub(crate) data: *mut u8,
+    pub(crate) offset: *mut u16,
+    pub(crate) symLen: *mut u8,
+    pub(crate) symPat: *mut u8,
+    pub(crate) blockSize: u8,
+    pub(crate) idxBits: u8,
+    pub(crate) minLen: u8,
+    pub(crate) constValue: [u8; 2],
+    pub(crate) base: [u64; 1],
 }
-pub const DTM: u32 = 1;
-pub const PYRRHIC_PAWN: u32 = 1;
-pub const PYRRHIC_KING: u32 = 6;
-pub const WDL: u32 = 0;
-pub const PYRRHIC_QUEEN: u32 = 5;
+
+#[repr(C)]
+pub(crate) struct PawnEntry {
+    pub(crate) be: BaseEntry,
+    pub(crate) ei: [EncInfo; 24],
+    pub(crate) dtmMap: *mut u16,
+    pub(crate) dtmMapIdx: [[[u16; 2]; 2]; 6],
+    pub(crate) dtzMap: *mut libc::c_void,
+    pub(crate) dtzMapIdx: [[u16; 4]; 4],
+    pub(crate) dtzFlags: [u8; 4],
+    pub(crate) dtmSwitched: bool,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub(crate) struct TbHashEntry {
+    pub(crate) key: u64,
+    pub(crate) ptr: *mut BaseEntry,
+}
+pub(crate) const DTZ: u32 = 2;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub(crate) struct stat {
+    pub(crate) st_dev: u64,
+    pub(crate) st_ino: u64,
+    pub(crate) st_nlink: u64,
+    pub(crate) st_mode: u32,
+    pub(crate) st_uid: u32,
+    pub(crate) st_gid: u32,
+    pub(crate) __pad0: i32,
+    pub(crate) st_rdev: u64,
+    pub(crate) st_size: i64,
+    pub(crate) st_blksize: i64,
+    pub(crate) st_blocks: i64,
+    pub(crate) st_atime: i64,
+    pub(crate) st_atimensec: u64,
+    pub(crate) st_mtime: i64,
+    pub(crate) st_mtimensec: u64,
+    pub(crate) st_ctime: i64,
+    pub(crate) st_ctimensec: u64,
+    pub(crate) __glibc_reserved: [i64; 3],
+}
+pub(crate) const DTM: u32 = 1;
+pub(crate) const PYRRHIC_PAWN: u32 = 1;
+pub(crate) const PYRRHIC_KING: u32 = 6;
+pub(crate) const WDL: u32 = 0;
+pub(crate) const PYRRHIC_QUEEN: u32 = 5;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct PyrrhicPosition {
-    pub white: u64,
-    pub black: u64,
-    pub kings: u64,
-    pub queens: u64,
-    pub rooks: u64,
-    pub bishops: u64,
-    pub knights: u64,
-    pub pawns: u64,
-    pub rule50: u8,
-    pub ep: u8,
-    pub turn: bool,
+pub(crate) struct PyrrhicPosition {
+    pub(crate) white: u64,
+    pub(crate) black: u64,
+    pub(crate) kings: u64,
+    pub(crate) queens: u64,
+    pub(crate) rooks: u64,
+    pub(crate) bishops: u64,
+    pub(crate) knights: u64,
+    pub(crate) pawns: u64,
+    pub(crate) rule50: u8,
+    pub(crate) ep: u8,
+    pub(crate) turn: bool,
 }
-pub const RANK_ENC: u32 = 2;
-pub const PIECE_ENC: u32 = 0;
-pub const FILE_ENC: u32 = 1;
-pub const PYRRHIC_WHITE: u32 = 1;
-pub const PYRRHIC_ROOK: u32 = 4;
-pub const PYRRHIC_BISHOP: u32 = 3;
-pub const PYRRHIC_KNIGHT: u32 = 2;
-pub const PYRRHIC_BLACK: u32 = 0;
-pub const PYRRHIC_PRIME_NONE: u64 = 0;
-pub const PYRRHIC_PRIME_BKING: u64 = 0;
-pub const PYRRHIC_PRIME_WKING: u64 = 0;
-pub type PyrrhicMove = u16;
-pub const PYRRHIC_PROMOSQS: u64 = 18374686479671623935;
-pub const PYRRHIC_PROMOTES_BISHOP: u32 = 3;
-pub const PYRRHIC_PROMOTES_ROOK: u32 = 2;
-pub const PYRRHIC_PROMOTES_KNIGHT: u32 = 4;
-pub const PYRRHIC_PROMOTES_QUEEN: u32 = 1;
-pub const PYRRHIC_PROMOTES_NONE: u32 = 0;
+pub(crate) const RANK_ENC: u32 = 2;
+pub(crate) const PIECE_ENC: u32 = 0;
+pub(crate) const FILE_ENC: u32 = 1;
+pub(crate) const PYRRHIC_WHITE: u32 = 1;
+pub(crate) const PYRRHIC_ROOK: u32 = 4;
+pub(crate) const PYRRHIC_BISHOP: u32 = 3;
+pub(crate) const PYRRHIC_KNIGHT: u32 = 2;
+pub(crate) const PYRRHIC_BLACK: u32 = 0;
+pub(crate) const PYRRHIC_PRIME_NONE: u64 = 0;
+pub(crate) const PYRRHIC_PRIME_BKING: u64 = 0;
+pub(crate) const PYRRHIC_PRIME_WKING: u64 = 0;
+pub(crate) type PyrrhicMove = u16;
+pub(crate) const PYRRHIC_PROMOSQS: u64 = 18374686479671623935;
+pub(crate) const PYRRHIC_PROMOTES_BISHOP: u32 = 3;
+pub(crate) const PYRRHIC_PROMOTES_ROOK: u32 = 2;
+pub(crate) const PYRRHIC_PROMOTES_KNIGHT: u32 = 4;
+pub(crate) const PYRRHIC_PROMOTES_QUEEN: u32 = 1;
+pub(crate) const PYRRHIC_PROMOTES_NONE: u32 = 0;
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct TbRootMove {
-    pub move_0: PyrrhicMove,
-    pub pv: [PyrrhicMove; 256],
-    pub pvSize: u32,
-    pub tbScore: i32,
-    pub tbRank: i32,
+pub(crate) struct TbRootMove {
+    pub(crate) move_0: PyrrhicMove,
+    pub(crate) pv: [PyrrhicMove; 256],
+    pub(crate) pvSize: u32,
+    pub(crate) tbScore: i32,
+    pub(crate) tbRank: i32,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct TbRootMoves {
-    pub size: u32,
-    pub moves: [TbRootMove; 256],
+pub(crate) struct TbRootMoves {
+    pub(crate) size: u32,
+    pub(crate) moves: [TbRootMove; 256],
 }
-pub const PYRRHIC_BKING: u32 = 14;
-pub const PYRRHIC_WKING: u32 = 6;
-pub fn poplsb(x: &mut u64) -> u64 {
+pub(crate) const PYRRHIC_BKING: u32 = 14;
+pub(crate) const PYRRHIC_WKING: u32 = 6;
+pub(crate) fn poplsb(x: &mut u64) -> u64 {
     let lsb = x.trailing_zeros();
     *x &= x.wrapping_sub(1);
     lsb as u64
@@ -208,21 +208,21 @@ use memmap2::{Mmap, MmapOptions};
 
 use crate::engine_adapter::{Color, EngineAdapter};
 
-pub fn popcount(x: u64) -> u64 {
+pub(crate) fn popcount(x: u64) -> u64 {
     x.count_ones() as u64
 }
 
-pub fn getlsb(x: u64) -> u64 {
+pub(crate) fn getlsb(x: u64) -> u64 {
     x.trailing_zeros() as u64
 }
 
 #[inline]
-unsafe extern "C" fn read_le_u32(mut p: *mut libc::c_void) -> u32 {
+unsafe fn read_le_u32(mut p: *mut libc::c_void) -> u32 {
     let le_u32 = (p as *mut u32).read_unaligned();
     u32::from_le(le_u32)
 }
 #[inline]
-unsafe extern "C" fn read_le_u16(mut p: *mut libc::c_void) -> u16 {
+unsafe fn read_le_u16(mut p: *mut libc::c_void) -> u16 {
     let le_u16 = (p as *mut u16).read_unaligned();
     u16::from_le(le_u16)
 }
@@ -231,7 +231,7 @@ static mut initialized: i32 = 0;
 static mut numPaths: i32 = 0;
 static mut pathString: *mut i8 = 0 as *const i8 as *mut i8;
 static mut paths: *mut *mut i8 = 0 as *const *mut i8 as *mut *mut i8;
-// unsafe extern "C" fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
+// unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
 unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std::io::Error> {
     let mut i: i32 = 0;
     let mut file: *mut i8 = std::ptr::null_mut::<i8>();
@@ -262,7 +262,7 @@ unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std
     ))
 }
 fn close_tb(_file_handle: File) {}
-unsafe extern "C" fn map_file(file: &File, mapping: *mut u64) -> *mut Mmap {
+unsafe fn map_file(file: &File, mapping: *mut u64) -> *mut Mmap {
     let file_size = file.metadata().unwrap().len();
     *mapping = file_size;
     let mut mmap = MmapOptions::new().map(file).expect("Failed to mmap file");
@@ -270,7 +270,7 @@ unsafe extern "C" fn map_file(file: &File, mapping: *mut u64) -> *mut Mmap {
     let mmap_ptr = Box::new(mmap);
     Box::leak(mmap_ptr) as *mut Mmap
 }
-unsafe extern "C" fn unmap_file(data: *mut Mmap, _size: u64) {
+unsafe fn unmap_file(data: *mut Mmap, _size: u64) {
     if data.is_null() {
         return;
     }
@@ -278,17 +278,17 @@ unsafe extern "C" fn unmap_file(data: *mut Mmap, _size: u64) {
     drop(mmap_ptr);
 }
 
-pub static mut TB_MaxCardinality: i32 = 0;
+pub(crate) static mut TB_MaxCardinality: i32 = 0;
 
-pub static mut TB_MaxCardinalityDTM: i32 = 0;
+pub(crate) static mut TB_MaxCardinalityDTM: i32 = 0;
 
-pub static mut TB_LARGEST: i32 = 0;
+pub(crate) static mut TB_LARGEST: i32 = 0;
 
-pub static mut TB_NUM_WDL: i32 = 0;
+pub(crate) static mut TB_NUM_WDL: i32 = 0;
 
-pub static mut TB_NUM_DTM: i32 = 0;
+pub(crate) static mut TB_NUM_DTM: i32 = 0;
 
-pub static mut TB_NUM_DTZ: i32 = 0;
+pub(crate) static mut TB_NUM_DTZ: i32 = 0;
 static mut tbSuffix: [*const i8; 3] = [
     b".rtbw\0" as *const u8 as *const i8,
     b".rtbm\0" as *const u8 as *const i8,
@@ -296,50 +296,50 @@ static mut tbSuffix: [*const i8; 3] = [
 ];
 const TB_MAGIC: [u32; 3] = [0x5d23e871, 0x88ac504b, 0xa50c66d7];
 
-pub extern "C" fn pyrrhic_move_from(move_0: PyrrhicMove) -> u32 {
+pub(crate) fn pyrrhic_move_from(move_0: PyrrhicMove) -> u32 {
     (move_0 as i32 >> 6 & 0x3f) as u32
 }
 
-pub extern "C" fn pyrrhic_move_to(move_0: PyrrhicMove) -> u32 {
+pub(crate) fn pyrrhic_move_to(move_0: PyrrhicMove) -> u32 {
     (move_0 & 0x3f) as u32
 }
 
-pub extern "C" fn pyrrhic_move_promotes(move_0: PyrrhicMove) -> u32 {
+pub(crate) fn pyrrhic_move_promotes(move_0: PyrrhicMove) -> u32 {
     (move_0 as i32 >> 12 & 0x7) as u32
 }
 
-pub extern "C" fn pyrrhic_colour_of_piece(piece: u8) -> i32 {
+pub(crate) fn pyrrhic_colour_of_piece(piece: u8) -> i32 {
     (piece as i32 >> 3 == 0) as i32
 }
 
-pub extern "C" fn pyrrhic_type_of_piece(piece: u8) -> i32 {
+pub(crate) fn pyrrhic_type_of_piece(piece: u8) -> i32 {
     piece as i32 & 0x7
 }
 
-pub extern "C" fn pyrrhic_test_bit(bb: u64, sq: i32) -> bool {
+pub(crate) fn pyrrhic_test_bit(bb: u64, sq: i32) -> bool {
     bb >> sq & 0x1 != 0
 }
 
-pub extern "C" fn pyrrhic_enable_bit(b: &mut u64, sq: i32) {
+pub(crate) fn pyrrhic_enable_bit(b: &mut u64, sq: i32) {
     *b |= 1 << sq;
 }
 
-pub extern "C" fn pyrrhic_disable_bit(b: &mut u64, sq: i32) {
+pub(crate) fn pyrrhic_disable_bit(b: &mut u64, sq: i32) {
     *b &= !(1 << sq);
 }
 
-pub extern "C" fn pyrrhic_promo_square(sq: i32) -> bool {
+pub(crate) fn pyrrhic_promo_square(sq: i32) -> bool {
     PYRRHIC_PROMOSQS >> sq & 0x1 != 0
 }
 
-pub extern "C" fn pyrrhic_pawn_start_square(colour: i32, sq: i32) -> bool {
+pub(crate) fn pyrrhic_pawn_start_square(colour: i32, sq: i32) -> bool {
     sq >> 3 == (if colour != 0 { 1 } else { 6 })
 }
 
-pub static pyrrhic_piece_to_char: [i8; 16] =
+pub(crate) static pyrrhic_piece_to_char: [i8; 16] =
     unsafe { *::core::mem::transmute::<&[u8; 16], &[i8; 16]>(b" PNBRQK  pnbrqk\0") };
 
-pub unsafe extern "C" fn pyrrhic_pieces_by_type(
+pub(crate) unsafe fn pyrrhic_pieces_by_type(
     pos: *const PyrrhicPosition,
     colour: i32,
     piece: i32,
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn pyrrhic_pieces_by_type(
     }
 }
 
-pub extern "C" fn pyrrhic_char_to_piece_type(c: i8) -> i32 {
+pub(crate) fn pyrrhic_char_to_piece_type(c: i8) -> i32 {
     let mut i: i32 = PYRRHIC_PAWN as i32;
     while i <= PYRRHIC_KING as i32 {
         if c as i32 == pyrrhic_piece_to_char[i as usize] as i32 {
@@ -373,7 +373,7 @@ pub extern "C" fn pyrrhic_char_to_piece_type(c: i8) -> i32 {
     0
 }
 
-pub unsafe extern "C" fn pyrrhic_calc_key(pos: *const PyrrhicPosition, mirror: i32) -> u64 {
+pub(crate) unsafe fn pyrrhic_calc_key(pos: *const PyrrhicPosition, mirror: i32) -> u64 {
     let mut white: u64 = if mirror != 0 {
         (*pos).black
     } else {
@@ -397,7 +397,7 @@ pub unsafe extern "C" fn pyrrhic_calc_key(pos: *const PyrrhicPosition, mirror: i
         .wrapping_add((popcount(black & (*pos).pawns)).wrapping_mul(PYRRHIC_PRIME_BPAWN))
 }
 
-pub unsafe extern "C" fn pyrrhic_calc_key_from_pcs(pieces: *mut i32, mirror: i32) -> u64 {
+pub(crate) unsafe fn pyrrhic_calc_key_from_pcs(pieces: *mut i32, mirror: i32) -> u64 {
     (*pieces.offset((PYRRHIC_WQUEEN as i32 ^ (if mirror != 0 { 8 } else { 0 })) as isize) as u64)
         .wrapping_mul(PYRRHIC_PRIME_WQUEEN)
         .wrapping_add(
@@ -447,7 +447,7 @@ pub unsafe extern "C" fn pyrrhic_calc_key_from_pcs(pieces: *mut i32, mirror: i32
         )
 }
 
-pub unsafe extern "C" fn pyrrhic_calc_key_from_pieces(pieces: *mut u8, length: i32) -> u64 {
+pub(crate) unsafe fn pyrrhic_calc_key_from_pieces(pieces: *mut u8, length: i32) -> u64 {
     const PYRRHIC_PRIMES: [u64; 16] = [
         PYRRHIC_PRIME_NONE,
         PYRRHIC_PRIME_WPAWN,
@@ -475,15 +475,15 @@ pub unsafe extern "C" fn pyrrhic_calc_key_from_pieces(pieces: *mut u8, length: i
     key
 }
 
-pub extern "C" fn pyrrhic_do_bb_move(bb: u64, from: u32, to: u32) -> u64 {
+pub(crate) fn pyrrhic_do_bb_move(bb: u64, from: u32, to: u32) -> u64 {
     ((bb >> from & 0x1) << to) | bb & (!(1 << from) & !(1 << to))
 }
 
-pub extern "C" fn pyrrhic_make_move(promote: u32, from: u32, to: u32) -> PyrrhicMove {
+pub(crate) fn pyrrhic_make_move(promote: u32, from: u32, to: u32) -> PyrrhicMove {
     ((promote & 0x7) << 12 | (from & 0x3f) << 6 | to & 0x3f) as PyrrhicMove
 }
 
-pub unsafe extern "C" fn pyrrhic_add_move(
+pub(crate) unsafe fn pyrrhic_add_move(
     mut moves: *mut PyrrhicMove,
     promotes: i32,
     from: u32,
@@ -510,7 +510,7 @@ pub unsafe extern "C" fn pyrrhic_add_move(
     moves
 }
 
-pub unsafe extern "C" fn pyrrhic_gen_captures<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_gen_captures<E: EngineAdapter>(
     pos: *const PyrrhicPosition,
     mut moves: *mut PyrrhicMove,
 ) -> *mut PyrrhicMove {
@@ -602,7 +602,7 @@ pub unsafe extern "C" fn pyrrhic_gen_captures<E: EngineAdapter>(
     moves
 }
 
-pub unsafe extern "C" fn pyrrhic_gen_moves<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_gen_moves<E: EngineAdapter>(
     pos: *const PyrrhicPosition,
     mut moves: *mut PyrrhicMove,
 ) -> *mut PyrrhicMove {
@@ -722,7 +722,7 @@ pub unsafe extern "C" fn pyrrhic_gen_moves<E: EngineAdapter>(
     moves
 }
 
-pub unsafe extern "C" fn pyrrhic_gen_legal<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_gen_legal<E: EngineAdapter>(
     pos: *const PyrrhicPosition,
     moves: *mut PyrrhicMove,
 ) -> *mut PyrrhicMove {
@@ -741,7 +741,7 @@ pub unsafe extern "C" fn pyrrhic_gen_legal<E: EngineAdapter>(
     results
 }
 
-pub unsafe extern "C" fn pyrrhic_is_pawn_move(
+pub(crate) unsafe fn pyrrhic_is_pawn_move(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
 ) -> bool {
@@ -753,7 +753,7 @@ pub unsafe extern "C" fn pyrrhic_is_pawn_move(
     pyrrhic_test_bit(us & (*pos).pawns, pyrrhic_move_from(move_0) as i32)
 }
 
-pub unsafe extern "C" fn pyrrhic_is_en_passant(
+pub(crate) unsafe fn pyrrhic_is_en_passant(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
 ) -> bool {
@@ -762,7 +762,7 @@ pub unsafe extern "C" fn pyrrhic_is_en_passant(
         && (*pos).ep as i32 != 0
 }
 
-pub unsafe extern "C" fn pyrrhic_is_capture(
+pub(crate) unsafe fn pyrrhic_is_capture(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
 ) -> bool {
@@ -775,7 +775,7 @@ pub unsafe extern "C" fn pyrrhic_is_capture(
         || pyrrhic_is_en_passant(pos, move_0) as i32 != 0
 }
 
-pub unsafe extern "C" fn pyrrhic_is_legal<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_is_legal<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
 ) -> bool {
     let mut us: u64 = if (*pos).turn as i32 != 0 {
@@ -805,7 +805,7 @@ pub unsafe extern "C" fn pyrrhic_is_legal<E: EngineAdapter>(
             == 0
 }
 
-pub unsafe extern "C" fn pyrrhic_is_check<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_is_check<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
 ) -> bool {
     let mut us: u64 = if (*pos).turn as i32 != 0 {
@@ -833,7 +833,7 @@ pub unsafe extern "C" fn pyrrhic_is_check<E: EngineAdapter>(
             != 0
 }
 
-pub unsafe extern "C" fn pyrrhic_is_mate<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_is_mate<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
 ) -> bool {
     if !pyrrhic_is_check::<E>(pos) {
@@ -864,7 +864,7 @@ pub unsafe extern "C" fn pyrrhic_is_mate<E: EngineAdapter>(
     1 != 0
 }
 
-pub unsafe extern "C" fn pyrrhic_do_move<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_do_move<E: EngineAdapter>(
     mut pos: *mut PyrrhicPosition,
     mut pos0: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
@@ -953,7 +953,7 @@ pub unsafe extern "C" fn pyrrhic_do_move<E: EngineAdapter>(
     pyrrhic_is_legal::<E>(pos)
 }
 
-pub unsafe extern "C" fn pyrrhic_legal_move<E: EngineAdapter>(
+pub(crate) unsafe fn pyrrhic_legal_move<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut move_0: PyrrhicMove,
 ) -> bool {
@@ -983,7 +983,7 @@ static mut tbHash: [TbHashEntry; 4096] = [TbHashEntry {
     key: 0,
     ptr: 0 as *const BaseEntry as *mut BaseEntry,
 }; 4096];
-unsafe extern "C" fn dtz_to_wdl(mut cnt50: i32, mut dtz: i32) -> u32 {
+unsafe fn dtz_to_wdl(mut cnt50: i32, mut dtz: i32) -> u32 {
     let mut wdl = 0;
     if dtz > 0 {
         wdl = if dtz + cnt50 <= 100 as i32 { 2 } else { 1 };
@@ -996,7 +996,7 @@ unsafe extern "C" fn dtz_to_wdl(mut cnt50: i32, mut dtz: i32) -> u32 {
     }
     (wdl + 2) as u32
 }
-pub unsafe extern "C" fn tb_probe_wdl<E: EngineAdapter>(
+pub(crate) unsafe fn tb_probe_wdl<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -1030,7 +1030,7 @@ pub unsafe extern "C" fn tb_probe_wdl<E: EngineAdapter>(
     }
     (v + 2) as u32
 }
-pub unsafe extern "C" fn tb_probe_root<E: EngineAdapter>(
+pub(crate) unsafe fn tb_probe_root<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -1079,7 +1079,7 @@ pub unsafe extern "C" fn tb_probe_root<E: EngineAdapter>(
     res = res & !0x80000 | ((pyrrhic_is_en_passant(&pos, move_0) as i32) << 19 & 0x80000) as u32;
     res
 }
-pub unsafe extern "C" fn tb_probe_root_dtz<E: EngineAdapter>(
+pub(crate) unsafe fn tb_probe_root_dtz<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -1113,7 +1113,7 @@ pub unsafe extern "C" fn tb_probe_root_dtz<E: EngineAdapter>(
     root_probe_dtz::<E>(&pos, hasRepeated, useRule50, results)
 }
 
-pub unsafe extern "C" fn tb_probe_root_wdl<E: EngineAdapter>(
+pub(crate) unsafe fn tb_probe_root_wdl<E: EngineAdapter>(
     mut white: u64,
     mut black: u64,
     mut kings: u64,
@@ -1145,7 +1145,7 @@ pub unsafe extern "C" fn tb_probe_root_wdl<E: EngineAdapter>(
     };
     root_probe_wdl::<E>(&pos, useRule50, results)
 }
-unsafe extern "C" fn prt_str(mut pos: *const PyrrhicPosition, mut str: *mut i8, mut flip: i32) {
+unsafe fn prt_str(mut pos: *const PyrrhicPosition, mut str: *mut i8, mut flip: i32) {
     let mut color: i32 = if flip != 0 {
         PYRRHIC_BLACK as i32
     } else {
@@ -1180,7 +1180,7 @@ unsafe extern "C" fn prt_str(mut pos: *const PyrrhicPosition, mut str: *mut i8, 
     str = str.offset(1);
     *fresh9 = 0;
 }
-unsafe extern "C" fn test_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
+unsafe fn test_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
     let mut file = open_tb(str, suffix);
     if let Ok(file) = file {
         let size = file.metadata().unwrap().len();
@@ -1200,7 +1200,7 @@ unsafe extern "C" fn test_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
         -1
     }
 }
-unsafe extern "C" fn map_tb(
+unsafe fn map_tb(
     mut name: *const i8,
     mut suffix: *const i8,
     mut mapping: *mut u64,
@@ -1215,7 +1215,7 @@ unsafe extern "C" fn map_tb(
     close_tb(file);
     data
 }
-unsafe extern "C" fn add_to_hash(mut ptr: *mut BaseEntry, mut key: u64) {
+unsafe fn add_to_hash(mut ptr: *mut BaseEntry, mut key: u64) {
     let mut idx: i32 = 0;
     idx = (key >> (64 - 12)) as i32;
     while !(tbHash[idx as usize].ptr).is_null() {
@@ -1224,7 +1224,7 @@ unsafe extern "C" fn add_to_hash(mut ptr: *mut BaseEntry, mut key: u64) {
     tbHash[idx as usize].key = key;
     tbHash[idx as usize].ptr = ptr;
 }
-unsafe extern "C" fn init_tb(mut str: *mut i8) {
+unsafe fn init_tb(mut str: *mut i8) {
     if test_tb(str, tbSuffix[WDL as i32 as usize]) == 0 {
         return;
     }
@@ -1312,7 +1312,7 @@ unsafe extern "C" fn init_tb(mut str: *mut i8) {
     }
 }
 
-pub unsafe extern "C" fn num_tables(be: *mut BaseEntry, type_0: i32) -> i32 {
+pub(crate) unsafe fn num_tables(be: *mut BaseEntry, type_0: i32) -> i32 {
     if (*be).hasPawns as i32 != 0 {
         if type_0 == DTM as i32 {
             6
@@ -1324,7 +1324,7 @@ pub unsafe extern "C" fn num_tables(be: *mut BaseEntry, type_0: i32) -> i32 {
     }
 }
 
-pub unsafe extern "C" fn first_ei(be: *mut BaseEntry, type_0: i32) -> *mut EncInfo {
+pub(crate) unsafe fn first_ei(be: *mut BaseEntry, type_0: i32) -> *mut EncInfo {
     if (*be).hasPawns as i32 != 0 {
         &mut *((*(be as *mut PawnEntry)).ei).as_mut_ptr().offset(
             (if type_0 == WDL as i32 {
@@ -1347,7 +1347,7 @@ pub unsafe extern "C" fn first_ei(be: *mut BaseEntry, type_0: i32) -> *mut EncIn
         ) as *mut EncInfo
     }
 }
-unsafe extern "C" fn free_tb_entry(be: *mut BaseEntry) {
+unsafe fn free_tb_entry(be: *mut BaseEntry) {
     let mut type_0: i32 = 0;
     while type_0 < 3 {
         if (*be).ready[type_0 as usize].load(Ordering::Relaxed) {
@@ -1368,7 +1368,7 @@ unsafe extern "C" fn free_tb_entry(be: *mut BaseEntry) {
     }
 }
 
-pub unsafe extern "C" fn tb_init(path: *const i8) -> bool {
+pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
     if initialized == 0 {
         init_indices();
         initialized = 1;
@@ -1727,7 +1727,7 @@ pub unsafe extern "C" fn tb_init(path: *const i8) -> bool {
     1 != 0
 }
 
-pub unsafe extern "C" fn tb_free() {
+pub(crate) unsafe fn tb_free() {
     tb_init(b"\0" as *const u8 as *const i8);
     free(pieceEntry as *mut libc::c_void);
     free(pawnEntry as *mut libc::c_void);
@@ -1953,7 +1953,7 @@ static mut PAWN_IDX: [[[u64; 24]; 6]; 2] = [[[0; 24]; 6]; 2];
 static mut PAWN_FACTOR_FILE: [[u64; 4]; 6] = [[0; 4]; 6];
 static mut PAWN_FACTOR_RANK: [[u64; 6]; 6] = [[0; 6]; 6];
 
-unsafe extern "C" fn init_indices() {
+unsafe fn init_indices() {
     let mut i = 0;
     let mut j = 0;
     let mut k = 0;
@@ -2010,7 +2010,11 @@ unsafe extern "C" fn init_indices() {
     }
 }
 
-pub unsafe extern "C" fn leading_pawn(mut p: *mut i32, mut be: *mut BaseEntry, enc: i32) -> i32 {
+pub(crate) unsafe fn leading_pawn(
+    mut p: *mut i32,
+    mut be: *mut BaseEntry,
+    enc: i32,
+) -> i32 {
     let mut i: i32 = 1;
     while i < (*be).c2rust_unnamed.pawns[0] as i32 {
         if FLAP[(enc - 1) as usize][*p.offset(0) as usize] as i32
@@ -2029,7 +2033,7 @@ pub unsafe extern "C" fn leading_pawn(mut p: *mut i32, mut be: *mut BaseEntry, e
     }
 }
 
-pub unsafe extern "C" fn encode(
+pub(crate) unsafe fn encode(
     mut p: *mut i32,
     mut ei: *mut EncInfo,
     mut be: *mut BaseEntry,
@@ -2202,28 +2206,28 @@ pub unsafe extern "C" fn encode(
     }
     idx
 }
-unsafe extern "C" fn encode_piece(
+unsafe fn encode_piece(
     mut p: *mut i32,
     mut ei: *mut EncInfo,
     mut be: *mut BaseEntry,
 ) -> u64 {
     encode(p, ei, be, PIECE_ENC as i32)
 }
-unsafe extern "C" fn encode_pawn_f(
+unsafe fn encode_pawn_f(
     mut p: *mut i32,
     mut ei: *mut EncInfo,
     mut be: *mut BaseEntry,
 ) -> u64 {
     encode(p, ei, be, FILE_ENC as i32)
 }
-unsafe extern "C" fn encode_pawn_r(
+unsafe fn encode_pawn_r(
     mut p: *mut i32,
     mut ei: *mut EncInfo,
     mut be: *mut BaseEntry,
 ) -> u64 {
     encode(p, ei, be, RANK_ENC as i32)
 }
-unsafe extern "C" fn subfactor(mut k: u64, mut n: u64) -> u64 {
+unsafe fn subfactor(mut k: u64, mut n: u64) -> u64 {
     let mut f: u64 = n;
     let mut l: u64 = 1;
     let mut i: u64 = 1;
@@ -2234,7 +2238,7 @@ unsafe extern "C" fn subfactor(mut k: u64, mut n: u64) -> u64 {
     }
     f / l
 }
-unsafe extern "C" fn init_enc_info(
+unsafe fn init_enc_info(
     mut ei: *mut EncInfo,
     mut be: *mut BaseEntry,
     mut tb: *mut u8,
@@ -2312,7 +2316,7 @@ unsafe extern "C" fn init_enc_info(
     }
     f
 }
-unsafe extern "C" fn calc_symLen(mut d: *mut PairsData, mut s: u32, mut tmp: *mut i8) {
+unsafe fn calc_symLen(mut d: *mut PairsData, mut s: u32, mut tmp: *mut i8) {
     let mut w: *mut u8 = ((*d).symPat).offset((3 * s) as isize);
     let mut s2: u32 = ((*w.offset(2) as i32) << 4 | *w.offset(1) as i32 >> 4) as u32;
     if s2 == 0xfff {
@@ -2331,7 +2335,7 @@ unsafe extern "C" fn calc_symLen(mut d: *mut PairsData, mut s: u32, mut tmp: *mu
     }
     *tmp.offset(s as isize) = 1;
 }
-unsafe extern "C" fn setup_pairs(
+unsafe fn setup_pairs(
     mut ptr: *mut *mut u8,
     mut tb_size: u64,
     mut size: *mut u64,
@@ -2424,7 +2428,7 @@ unsafe extern "C" fn setup_pairs(
     (*d).offset = ((*d).offset).offset(-((*d).minLen as i32 as isize));
     d
 }
-unsafe extern "C" fn init_table(be: *mut BaseEntry, str: *const i8, type_0: i32) -> bool {
+unsafe fn init_table(be: *mut BaseEntry, str: *const i8, type_0: i32) -> bool {
     let mut mmap = map_tb(
         str,
         tbSuffix[type_0 as usize],
@@ -2621,7 +2625,7 @@ unsafe extern "C" fn init_table(be: *mut BaseEntry, str: *const i8, type_0: i32)
     }
     true
 }
-unsafe extern "C" fn decompress_pairs(mut d: *mut PairsData, mut idx: u64) -> *mut u8 {
+unsafe fn decompress_pairs(mut d: *mut PairsData, mut idx: u64) -> *mut u8 {
     if (*d).idxBits == 0 {
         return ((*d).constValue).as_mut_ptr();
     }
@@ -2696,7 +2700,7 @@ unsafe extern "C" fn decompress_pairs(mut d: *mut PairsData, mut idx: u64) -> *m
     &mut *symPat.offset((3 * sym) as isize) as *mut u8
 }
 #[inline]
-unsafe extern "C" fn fill_squares(
+unsafe fn fill_squares(
     mut pos: *const PyrrhicPosition,
     mut pc: *mut u8,
     mut flip: bool,
@@ -2723,7 +2727,7 @@ unsafe extern "C" fn fill_squares(
     i
 }
 
-pub unsafe extern "C" fn probe_table(
+pub(crate) unsafe fn probe_table(
     mut pos: *const PyrrhicPosition,
     mut s: i32,
     mut success: *mut i32,
@@ -2904,20 +2908,20 @@ pub unsafe extern "C" fn probe_table(
     }
     v
 }
-unsafe extern "C" fn probe_wdl_table(
+unsafe fn probe_wdl_table(
     mut pos: *const PyrrhicPosition,
     mut success: *mut i32,
 ) -> i32 {
     probe_table(pos, 0, success, WDL as i32)
 }
-unsafe extern "C" fn probe_dtz_table(
+unsafe fn probe_dtz_table(
     mut pos: *const PyrrhicPosition,
     mut wdl: i32,
     mut success: *mut i32,
 ) -> i32 {
     probe_table(pos, wdl, success, DTZ as i32)
 }
-unsafe extern "C" fn probe_ab<E: EngineAdapter>(
+unsafe fn probe_ab<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut alpha: i32,
     mut beta: i32,
@@ -2963,7 +2967,7 @@ unsafe extern "C" fn probe_ab<E: EngineAdapter>(
         v_0
     }
 }
-unsafe extern "C" fn probe_wdl<E: EngineAdapter>(
+unsafe fn probe_wdl<E: EngineAdapter>(
     mut pos: *mut PyrrhicPosition,
     mut success: *mut i32,
 ) -> i32 {
@@ -3040,7 +3044,7 @@ unsafe extern "C" fn probe_wdl<E: EngineAdapter>(
     v_0
 }
 const WDL_TO_DTZ: [i32; 5] = [-1, -101, 0, 101, 1];
-unsafe extern "C" fn probe_dtz<E: EngineAdapter>(
+unsafe fn probe_dtz<E: EngineAdapter>(
     mut pos: *mut PyrrhicPosition,
     mut success: *mut i32,
 ) -> i32 {
@@ -3128,7 +3132,7 @@ unsafe extern "C" fn probe_dtz<E: EngineAdapter>(
     best
 }
 
-pub unsafe extern "C" fn root_probe_dtz<E: EngineAdapter>(
+pub(crate) unsafe fn root_probe_dtz<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut hasRepeated: bool,
     mut useRule50: bool,
@@ -3224,7 +3228,7 @@ pub unsafe extern "C" fn root_probe_dtz<E: EngineAdapter>(
     1
 }
 
-pub unsafe extern "C" fn root_probe_wdl<E: EngineAdapter>(
+pub(crate) unsafe fn root_probe_wdl<E: EngineAdapter>(
     mut pos: *const PyrrhicPosition,
     mut useRule50: bool,
     mut rm: *mut TbRootMoves,
@@ -3274,7 +3278,7 @@ pub unsafe extern "C" fn root_probe_wdl<E: EngineAdapter>(
     }
     1
 }
-unsafe extern "C" fn probe_root<E: EngineAdapter>(
+unsafe fn probe_root<E: EngineAdapter>(
     mut pos: *mut PyrrhicPosition,
     mut score: *mut i32,
     mut results: *mut u32,
