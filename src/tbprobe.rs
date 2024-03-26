@@ -1,5 +1,5 @@
 use std::{
-    ffi::CStr,
+    ffi::{CStr, CString},
     fs::{File, OpenOptions},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -13,7 +13,6 @@ enum TableType {
     Dtz,
 }
 extern "C" {
-    fn snprintf(_: *mut i8, _: u64, _: *const i8, _: ...) -> i32;
     fn perror(__s: *const i8);
     fn malloc(_: u64) -> *mut libc::c_void;
     fn free(_: *mut libc::c_void);
@@ -21,7 +20,6 @@ extern "C" {
     fn memcpy(_: *mut libc::c_void, _: *const libc::c_void, _: u64) -> *mut libc::c_void;
     fn memset(_: *mut libc::c_void, _: i32, _: u64) -> *mut libc::c_void;
     fn strcpy(_: *mut i8, _: *const i8) -> *mut i8;
-    fn strcat(_: *mut i8, _: *const i8) -> *mut i8;
     fn strcmp(_: *const i8, _: *const i8) -> i32;
     fn strlen(_: *const i8) -> u64;
 }
@@ -234,23 +232,18 @@ static mut paths: *mut *mut i8 = 0 as *const *mut i8 as *mut *mut i8;
 // unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
 unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std::io::Error> {
     let mut i: i32 = 0;
-    let mut file: *mut i8 = std::ptr::null_mut::<i8>();
     i = 0;
     while i < numPaths {
-        file = malloc(
-            (strlen(*paths.offset(i as isize)))
-                .wrapping_add(strlen(str))
-                .wrapping_add(strlen(suffix))
-                .wrapping_add(2),
-        ) as *mut i8;
-        strcpy(file, *paths.offset(i as isize));
-        strcat(file, b"/\0" as *const u8 as *const i8);
-        strcat(file, str);
-        strcat(file, suffix);
-        let file_handle = OpenOptions::new()
-            .read(true)
-            .open(CStr::from_ptr(file).to_str().unwrap());
-        free(file as *mut libc::c_void);
+        let path = CStr::from_ptr(*paths.offset(i as isize));
+        let str = CStr::from_ptr(str as *mut i8);
+        let suffix = CStr::from_ptr(suffix as *mut i8);
+        let file = format!(
+            "{}/{}.{}",
+            path.to_str().unwrap(),
+            str.to_str().unwrap(),
+            suffix.to_str().unwrap()
+        );
+        let file_handle = OpenOptions::new().read(true).open(file);
         if file_handle.is_ok() {
             return file_handle;
         }
@@ -606,11 +599,11 @@ pub(crate) unsafe fn pyrrhic_gen_moves<E: EngineAdapter>(
     pos: *const PyrrhicPosition,
     mut moves: *mut PyrrhicMove,
 ) -> *mut PyrrhicMove {
-    let Forward: i32 = (if (*pos).turn as i32 == PYRRHIC_WHITE as i32 {
+    let Forward: i32 = if (*pos).turn as i32 == PYRRHIC_WHITE as i32 {
         8
     } else {
         -8
-    }) as i32;
+    };
     let mut us: u64 = if (*pos).turn {
         (*pos).white
     } else {
@@ -775,9 +768,7 @@ pub(crate) unsafe fn pyrrhic_is_capture(
         || pyrrhic_is_en_passant(pos, move_0) as i32 != 0
 }
 
-pub(crate) unsafe fn pyrrhic_is_legal<E: EngineAdapter>(
-    mut pos: *const PyrrhicPosition,
-) -> bool {
+pub(crate) unsafe fn pyrrhic_is_legal<E: EngineAdapter>(mut pos: *const PyrrhicPosition) -> bool {
     let mut us: u64 = if (*pos).turn as i32 != 0 {
         (*pos).black
     } else {
@@ -805,9 +796,7 @@ pub(crate) unsafe fn pyrrhic_is_legal<E: EngineAdapter>(
             == 0
 }
 
-pub(crate) unsafe fn pyrrhic_is_check<E: EngineAdapter>(
-    mut pos: *const PyrrhicPosition,
-) -> bool {
+pub(crate) unsafe fn pyrrhic_is_check<E: EngineAdapter>(mut pos: *const PyrrhicPosition) -> bool {
     let mut us: u64 = if (*pos).turn as i32 != 0 {
         (*pos).white
     } else {
@@ -833,11 +822,9 @@ pub(crate) unsafe fn pyrrhic_is_check<E: EngineAdapter>(
             != 0
 }
 
-pub(crate) unsafe fn pyrrhic_is_mate<E: EngineAdapter>(
-    mut pos: *const PyrrhicPosition,
-) -> bool {
+pub(crate) unsafe fn pyrrhic_is_mate<E: EngineAdapter>(mut pos: *const PyrrhicPosition) -> bool {
     if !pyrrhic_is_check::<E>(pos) {
-        return 0 != 0;
+        return false;
     }
     let mut pos1: PyrrhicPosition = PyrrhicPosition {
         white: 0,
@@ -857,7 +844,7 @@ pub(crate) unsafe fn pyrrhic_is_mate<E: EngineAdapter>(
     let mut end: *mut PyrrhicMove = pyrrhic_gen_moves::<E>(pos, moves);
     while moves < end {
         if pyrrhic_do_move::<E>(&mut pos1, pos, *moves) {
-            return 0 != 0;
+            return false;
         }
         moves = moves.offset(1);
     }
@@ -1200,11 +1187,7 @@ unsafe fn test_tb(mut str: *const i8, mut suffix: *const i8) -> i32 {
         -1
     }
 }
-unsafe fn map_tb(
-    mut name: *const i8,
-    mut suffix: *const i8,
-    mut mapping: *mut u64,
-) -> *mut Mmap {
+unsafe fn map_tb(mut name: *const i8, mut suffix: *const i8, mut mapping: *mut u64) -> *mut Mmap {
     let mut file = open_tb(name, suffix);
     if file.is_err() {
         return std::ptr::null_mut();
@@ -1368,7 +1351,7 @@ unsafe fn free_tb_entry(be: *mut BaseEntry) {
     }
 }
 
-pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
+pub(crate) unsafe fn tb_init(path: &str) -> bool {
     if initialized == 0 {
         init_indices();
         initialized = 1;
@@ -1395,12 +1378,19 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
         numDtm = numDtz;
         numWdl = numDtm;
     }
-    let mut p: *const i8 = path;
-    if strlen(p) == 0 || strcmp(p, b"<empty>\0" as *const u8 as *const i8) == 0 {
-        return 1 != 0;
+    // let mut p: *const i8 = path;
+    // if strlen(p) == 0 || strcmp(p, b"<empty>\0" as *const u8 as *const i8) == 0 {
+    //     return 1 != 0;
+    // }
+    if path.is_empty() || path == "<empty>" {
+        return true;
     }
-    pathString = malloc((strlen(p)).wrapping_add(1)) as *mut i8;
-    strcpy(pathString, p);
+    // pathString = malloc((strlen(p)).wrapping_add(1)) as *mut i8;
+    // strcpy(pathString, p);
+    pathString = malloc(path.len() as u64 + 1) as *mut i8;
+    let cpath = CString::new(path.as_bytes()).unwrap();
+
+    strcpy(pathString, cpath.as_ptr());
     numPaths = 0;
     let mut i_1: i32 = 0;
     loop {
@@ -1426,8 +1416,8 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
         while *pathString.offset(j as isize) == 0 {
             j += 1;
         }
-        let fresh12 = &mut (*paths.offset(i_2 as isize));
-        *fresh12 = &mut *pathString.offset(j as isize) as *mut i8;
+        let fresh12 = paths.offset(i_2 as isize);
+        *fresh12 = pathString.offset(j as isize);
         while *pathString.offset(j as isize) != 0 {
             j += 1;
         }
@@ -1453,7 +1443,6 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
         tbHash[i_3 as usize].ptr = std::ptr::null_mut::<BaseEntry>();
         i_3 += 1;
     }
-    let mut str: [i8; 16] = [0; 16];
     let mut i_4: i32 = 0;
     let mut j_0: i32 = 0;
     let mut k: i32 = 0;
@@ -1461,27 +1450,25 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
     let mut m: i32 = 0;
     i_4 = 0;
     while i_4 < 5 {
-        snprintf(
-            str.as_mut_ptr(),
-            16,
-            b"K%cvK\0" as *const u8 as *const i8,
-            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-        );
-        init_tb(str.as_mut_ptr());
+        let str = CString::new(format!(
+            "K{}vK",
+            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8 as char
+        ))
+        .unwrap();
+        init_tb(str.as_ptr() as *mut i8);
         i_4 += 1;
     }
     i_4 = 0;
     while i_4 < 5 {
         j_0 = i_4;
         while j_0 < 5 {
-            snprintf(
-                str.as_mut_ptr(),
-                16,
-                b"K%cvK%c\0" as *const u8 as *const i8,
-                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-            );
-            init_tb(str.as_mut_ptr());
+            let str = CString::new(format!(
+                "K{}vK{}",
+                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8 as char,
+                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8 as char,
+            ))
+            .unwrap();
+            init_tb(str.as_ptr() as *mut i8);
             j_0 += 1;
         }
         i_4 += 1;
@@ -1490,14 +1477,13 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
     while i_4 < 5 {
         j_0 = i_4;
         while j_0 < 5 {
-            snprintf(
-                str.as_mut_ptr(),
-                16,
-                b"K%c%cvK\0" as *const u8 as *const i8,
-                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-            );
-            init_tb(str.as_mut_ptr());
+            let str = CString::new(format!(
+                "K{}{}vK",
+                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8 as char,
+                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8 as char,
+            ))
+            .unwrap();
+            init_tb(str.as_ptr() as *mut i8);
             j_0 += 1;
         }
         i_4 += 1;
@@ -1508,15 +1494,14 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
         while j_0 < 5 {
             k = 0;
             while k < 5 {
-                snprintf(
-                    str.as_mut_ptr(),
-                    16,
-                    b"K%c%cvK%c\0" as *const u8 as *const i8,
-                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                );
-                init_tb(str.as_mut_ptr());
+                let str = CString::new(format!(
+                    "K{}{}v{}K",
+                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8 as char,
+                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8 as char,
+                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8 as char,
+                ))
+                .unwrap();
+                init_tb(str.as_ptr() as *mut i8);
                 k += 1;
             }
             j_0 += 1;
@@ -1529,15 +1514,14 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
         while j_0 < 5 {
             k = j_0;
             while k < 5 {
-                snprintf(
-                    str.as_mut_ptr(),
-                    16,
-                    b"K%c%c%cvK\0" as *const u8 as *const i8,
-                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                );
-                init_tb(str.as_mut_ptr());
+                let str = CString::new(format!(
+                    "K{}{}{}vK",
+                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8 as char,
+                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8 as char,
+                    pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8 as char,
+                ))
+                .unwrap();
+                init_tb(str.as_ptr() as *mut i8);
                 k += 1;
             }
             j_0 += 1;
@@ -1553,16 +1537,19 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
                 while k < 5 {
                     l = if i_4 == k { j_0 } else { k };
                     while l < 5 {
-                        snprintf(
-                            str.as_mut_ptr(),
-                            16,
-                            b"K%c%cvK%c%c\0" as *const u8 as *const i8,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as i32,
-                        );
-                        init_tb(str.as_mut_ptr());
+                        let str = CString::new(format!(
+                            "K{}{}vK{}{}",
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as u8
+                                as char,
+                        ))
+                        .unwrap();
+                        init_tb(str.as_ptr() as *mut i8);
                         l += 1;
                     }
                     k += 1;
@@ -1579,16 +1566,19 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
                 while k < 5 {
                     l = 0;
                     while l < 5 {
-                        snprintf(
-                            str.as_mut_ptr(),
-                            16,
-                            b"K%c%c%cvK%c\0" as *const u8 as *const i8,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as i32,
-                        );
-                        init_tb(str.as_mut_ptr());
+                        let str = CString::new(format!(
+                            "K{}{}{}vK{}",
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as u8
+                                as char,
+                        ))
+                        .unwrap();
+                        init_tb(str.as_ptr() as *mut i8);
                         l += 1;
                     }
                     k += 1;
@@ -1605,16 +1595,19 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
                 while k < 5 {
                     l = k;
                     while l < 5 {
-                        snprintf(
-                            str.as_mut_ptr(),
-                            16,
-                            b"K%c%c%c%cvK\0" as *const u8 as *const i8,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as i32,
-                        );
-                        init_tb(str.as_mut_ptr());
+                        let str = CString::new(format!(
+                            "K{}{}{}{}vK",
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8
+                                as char,
+                            pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as u8
+                                as char,
+                        ))
+                        .unwrap();
+                        init_tb(str.as_ptr() as *mut i8);
                         l += 1;
                     }
                     k += 1;
@@ -1633,17 +1626,21 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
                     while l < 5 {
                         m = l;
                         while m < 5 {
-                            snprintf(
-                                str.as_mut_ptr(),
-                                16,
-                                b"K%c%c%c%c%cvK\0" as *const u8 as *const i8,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - m) as usize] as i32,
-                            );
-                            init_tb(str.as_mut_ptr());
+                            let str = CString::new(format!(
+                                "K{}{}{}{}{}vK",
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - m) as usize] as u8
+                                    as char,
+                            ))
+                            .unwrap();
+                            init_tb(str.as_ptr() as *mut i8);
                             m += 1;
                         }
                         l += 1;
@@ -1664,17 +1661,21 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
                     while l < 5 {
                         m = 0;
                         while m < 5 {
-                            snprintf(
-                                str.as_mut_ptr(),
-                                16,
-                                b"K%c%c%c%cvK%c\0" as *const u8 as *const i8,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - m) as usize] as i32,
-                            );
-                            init_tb(str.as_mut_ptr());
+                            let str = CString::new(format!(
+                                "K{}{}{}{}vK{}",
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - m) as usize] as u8
+                                    as char,
+                            ))
+                            .unwrap();
+                            init_tb(str.as_ptr() as *mut i8);
                             m += 1;
                         }
                         l += 1;
@@ -1695,17 +1696,21 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
                     while l < 5 {
                         m = l;
                         while m < 5 {
-                            snprintf(
-                                str.as_mut_ptr(),
-                                16,
-                                b"K%c%c%cvK%c%c\0" as *const u8 as *const i8,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as i32,
-                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - m) as usize] as i32,
-                            );
-                            init_tb(str.as_mut_ptr());
+                            let str = CString::new(format!(
+                                "K{}{}{}vK{}{}",
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - i_4) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - j_0) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - k) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - l) as usize] as u8
+                                    as char,
+                                pyrrhic_piece_to_char[(PYRRHIC_QUEEN as i32 - m) as usize] as u8
+                                    as char,
+                            ))
+                            .unwrap();
+                            init_tb(str.as_ptr() as *mut i8);
                             m += 1;
                         }
                         l += 1;
@@ -1728,7 +1733,7 @@ pub(crate) unsafe fn tb_init(path: *const i8) -> bool {
 }
 
 pub(crate) unsafe fn tb_free() {
-    tb_init(b"\0" as *const u8 as *const i8);
+    tb_init("");
     free(pieceEntry as *mut libc::c_void);
     free(pawnEntry as *mut libc::c_void);
 }
@@ -2010,11 +2015,7 @@ unsafe fn init_indices() {
     }
 }
 
-pub(crate) unsafe fn leading_pawn(
-    mut p: *mut i32,
-    mut be: *mut BaseEntry,
-    enc: i32,
-) -> i32 {
+pub(crate) unsafe fn leading_pawn(mut p: *mut i32, mut be: *mut BaseEntry, enc: i32) -> i32 {
     let mut i: i32 = 1;
     while i < (*be).c2rust_unnamed.pawns[0] as i32 {
         if FLAP[(enc - 1) as usize][*p.offset(0) as usize] as i32
@@ -2206,25 +2207,13 @@ pub(crate) unsafe fn encode(
     }
     idx
 }
-unsafe fn encode_piece(
-    mut p: *mut i32,
-    mut ei: *mut EncInfo,
-    mut be: *mut BaseEntry,
-) -> u64 {
+unsafe fn encode_piece(mut p: *mut i32, mut ei: *mut EncInfo, mut be: *mut BaseEntry) -> u64 {
     encode(p, ei, be, PIECE_ENC as i32)
 }
-unsafe fn encode_pawn_f(
-    mut p: *mut i32,
-    mut ei: *mut EncInfo,
-    mut be: *mut BaseEntry,
-) -> u64 {
+unsafe fn encode_pawn_f(mut p: *mut i32, mut ei: *mut EncInfo, mut be: *mut BaseEntry) -> u64 {
     encode(p, ei, be, FILE_ENC as i32)
 }
-unsafe fn encode_pawn_r(
-    mut p: *mut i32,
-    mut ei: *mut EncInfo,
-    mut be: *mut BaseEntry,
-) -> u64 {
+unsafe fn encode_pawn_r(mut p: *mut i32, mut ei: *mut EncInfo, mut be: *mut BaseEntry) -> u64 {
     encode(p, ei, be, RANK_ENC as i32)
 }
 unsafe fn subfactor(mut k: u64, mut n: u64) -> u64 {
@@ -2752,17 +2741,19 @@ pub(crate) unsafe fn probe_table(
     }
     if !(*be).ready[type_0 as usize].load(Ordering::Acquire) {
         // will be unlocked at the end of scope
-        let _lock = TB_MUTEX.lock();
+        let lock = TB_MUTEX.lock().unwrap();
         if !(*be).ready[type_0 as usize].load(Ordering::Relaxed) {
             let mut str: [i8; 16] = [0; 16];
             prt_str(pos, str.as_mut_ptr(), ((*be).key != key) as i32);
             if !init_table(be, str.as_mut_ptr(), type_0) {
                 tbHash[hashIdx as usize].ptr = std::ptr::null_mut::<BaseEntry>();
                 *success = 0;
+                drop(lock);
                 return 0;
             }
             (*be).ready[type_0 as usize].store(true, Ordering::Release);
         }
+        drop(lock);
     }
     let mut bside: bool = false;
     let mut flip: bool = false;
@@ -2908,10 +2899,7 @@ pub(crate) unsafe fn probe_table(
     }
     v
 }
-unsafe fn probe_wdl_table(
-    mut pos: *const PyrrhicPosition,
-    mut success: *mut i32,
-) -> i32 {
+unsafe fn probe_wdl_table(mut pos: *const PyrrhicPosition, mut success: *mut i32) -> i32 {
     probe_table(pos, 0, success, WDL as i32)
 }
 unsafe fn probe_dtz_table(
@@ -2967,10 +2955,7 @@ unsafe fn probe_ab<E: EngineAdapter>(
         v_0
     }
 }
-unsafe fn probe_wdl<E: EngineAdapter>(
-    mut pos: *mut PyrrhicPosition,
-    mut success: *mut i32,
-) -> i32 {
+unsafe fn probe_wdl<E: EngineAdapter>(mut pos: *mut PyrrhicPosition, mut success: *mut i32) -> i32 {
     *success = 1;
     let mut moves0: [PyrrhicMove; 64] = [0; 64];
     let mut m: *mut PyrrhicMove = moves0.as_mut_ptr();
@@ -3044,10 +3029,7 @@ unsafe fn probe_wdl<E: EngineAdapter>(
     v_0
 }
 const WDL_TO_DTZ: [i32; 5] = [-1, -101, 0, 101, 1];
-unsafe fn probe_dtz<E: EngineAdapter>(
-    mut pos: *mut PyrrhicPosition,
-    mut success: *mut i32,
-) -> i32 {
+unsafe fn probe_dtz<E: EngineAdapter>(mut pos: *mut PyrrhicPosition, mut success: *mut i32) -> i32 {
     let mut wdl: i32 = probe_wdl::<E>(pos, success);
     if *success == 0 {
         return 0;

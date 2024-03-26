@@ -5,11 +5,14 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_assignments)]
 #![allow(unused_mut)]
-#![feature(extern_types)]
 
 extern crate libc;
 pub mod engine_adapter;
 pub mod tbprobe;
+
+pub mod tablebases;
+pub use tablebases::*;
+pub use engine_adapter::*;
 
 #[cfg(test)]
 mod tests;

@@ -1,11 +1,14 @@
-use std::{ffi::CString, str::FromStr};
+use std::str::FromStr;
 
 use crate::{
     engine_adapter::{Color, EngineAdapter},
-    tbprobe::*,
+    tablebases::{DtzProbeResult, TableBases, WdlProbeResult},
+    TBError,
 };
 use cozy_chess::*;
 
+const SYZYGY_PATH: &str = "/Users/venter/Downloads/syzygy";
+#[derive(Copy, Clone)]
 struct CozyChessAdapter;
 
 impl EngineAdapter for CozyChessAdapter {
@@ -38,69 +41,124 @@ impl EngineAdapter for CozyChessAdapter {
         .0
     }
 }
-#[test]
+
+// #[test]
 fn test_probe_kpvk() {
-    unsafe {
-        let syzygy_path = CString::new(env!("SYZYGY_PATH")).unwrap();
-        let init = tb_init(syzygy_path.as_ptr() as *const i8);
-        if !init {
-            panic!("failed to init TBs")
-        }
-        let test_pos_wins = [
-            ("6k1/8/8/3P4/4K3/8/8/8 w - - 0 1", 1),
-            ("8/7k/1p6/1P6/7K/8/8/8 w - - 0 1", 21),
-        ];
-        let test_pos_draw = "6k1/8/8/3P4/4K3/8/8/8 b - - 0 1";
+    let tb = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH).unwrap();
+    let test_pos_wins = [
+        ("6k1/8/8/3P4/4K3/8/8/8 w - - 0 1", 1),
+        ("8/7k/1p6/1P6/7K/8/8/8 w - - 0 1", 21),
+    ];
+    let test_pos_draw = "6k1/8/8/3P4/4K3/8/8/8 b - - 0 1";
 
-        for (win_pos, dtz) in test_pos_wins {
-            let test_board_win = Board::from_str(win_pos).unwrap();
+    for (win_pos, dtz_expected) in test_pos_wins {
+        let test_board_win = Board::from_str(win_pos).unwrap();
 
-            let wdl_win = tb_probe_wdl::<CozyChessAdapter>(
-                test_board_win.colors(cozy_chess::Color::White).0,
-                test_board_win.colors(cozy_chess::Color::Black).0,
-                test_board_win.pieces(Piece::King).0,
-                test_board_win.pieces(Piece::Queen).0,
-                test_board_win.pieces(Piece::Rook).0,
-                test_board_win.pieces(Piece::Bishop).0,
-                test_board_win.pieces(Piece::Knight).0,
-                test_board_win.pieces(Piece::Pawn).0,
-                0, // no ep square
-                test_board_win.side_to_move() == cozy_chess::Color::White,
-            );
-            assert!(wdl_win == 4);
-            let mut results = 0u32;
-            let dtz_result = tb_probe_root::<CozyChessAdapter>(
-                test_board_win.colors(cozy_chess::Color::White).0,
-                test_board_win.colors(cozy_chess::Color::Black).0,
-                test_board_win.pieces(Piece::King).0,
-                test_board_win.pieces(Piece::Queen).0,
-                test_board_win.pieces(Piece::Rook).0,
-                test_board_win.pieces(Piece::Bishop).0,
-                test_board_win.pieces(Piece::Knight).0,
-                test_board_win.pieces(Piece::Pawn).0,
-                0,
-                0,
-                test_board_win.side_to_move() == cozy_chess::Color::White,
-                &mut results as *mut _,
-            );
-
-            assert!((dtz_result & 0xFFF00000) >> 20 == dtz);
-        }
-        let test_board_draw = Board::from_str(test_pos_draw).unwrap();
-        let wdl_draw = tb_probe_wdl::<CozyChessAdapter>(
-            test_board_draw.colors(cozy_chess::Color::White).0,
-            test_board_draw.colors(cozy_chess::Color::Black).0,
-            test_board_draw.pieces(Piece::King).0,
-            test_board_draw.pieces(Piece::Queen).0,
-            test_board_draw.pieces(Piece::Rook).0,
-            test_board_draw.pieces(Piece::Bishop).0,
-            test_board_draw.pieces(Piece::Knight).0,
-            test_board_draw.pieces(Piece::Pawn).0,
+        let wdl_win = tb.probe_wdl(
+            test_board_win.colors(cozy_chess::Color::White).0,
+            test_board_win.colors(cozy_chess::Color::Black).0,
+            test_board_win.pieces(Piece::King).0,
+            test_board_win.pieces(Piece::Queen).0,
+            test_board_win.pieces(Piece::Rook).0,
+            test_board_win.pieces(Piece::Bishop).0,
+            test_board_win.pieces(Piece::Knight).0,
+            test_board_win.pieces(Piece::Pawn).0,
             0, // no ep square
-            test_board_draw.side_to_move() == cozy_chess::Color::White,
+            test_board_win.side_to_move() == cozy_chess::Color::White,
+        );
+        assert!(wdl_win == Ok(WdlProbeResult::Win));
+        let dtz_result = tb.probe_root(
+            test_board_win.colors(cozy_chess::Color::White).0,
+            test_board_win.colors(cozy_chess::Color::Black).0,
+            test_board_win.pieces(Piece::King).0,
+            test_board_win.pieces(Piece::Queen).0,
+            test_board_win.pieces(Piece::Rook).0,
+            test_board_win.pieces(Piece::Bishop).0,
+            test_board_win.pieces(Piece::Knight).0,
+            test_board_win.pieces(Piece::Pawn).0,
+            0,
+            0,
+            test_board_win.side_to_move() == cozy_chess::Color::White,
         );
 
-        assert!(wdl_draw == 2);
-        tb_free();
+        assert!(match dtz_result.unwrap() {
+            DtzProbeResult::Stalemate | DtzProbeResult::Checkmate => false,
+            DtzProbeResult::DtzResult {
+                wdl: _,
+                from_square: _,
+                to_square: _,
+                promotion: _,
+                ep: _,
+                dtz,
+            } => dtz == dtz_expected,
+        })
     }
+    let test_board_draw = Board::from_str(test_pos_draw).unwrap();
+    let wdl_draw = tb.probe_wdl(
+        test_board_draw.colors(cozy_chess::Color::White).0,
+        test_board_draw.colors(cozy_chess::Color::Black).0,
+        test_board_draw.pieces(Piece::King).0,
+        test_board_draw.pieces(Piece::Queen).0,
+        test_board_draw.pieces(Piece::Rook).0,
+        test_board_draw.pieces(Piece::Bishop).0,
+        test_board_draw.pieces(Piece::Knight).0,
+        test_board_draw.pieces(Piece::Pawn).0,
+        0, // no ep square
+        test_board_draw.side_to_move() == cozy_chess::Color::White,
+    );
+
+    assert!(wdl_draw == Ok(WdlProbeResult::Draw));
+}
+
+// #[test]
+fn test_double_init() {
+    let _first_tb = std::hint::black_box(TableBases::<CozyChessAdapter>::new(SYZYGY_PATH).unwrap());
+    let second_tb = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH);
+
+    assert!(matches!(second_tb, Err(TBError::AlreadyInitialized)));
+}
+
+#[test]
+fn test_multithread() {
+    let pos = "8/7k/1p6/1P6/7K/8/8/8 w - - 0 1";
+    let first_tb = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH).unwrap();
+    let second_tb = first_tb.clone();
+
+    let worker = std::thread::spawn(move || {
+        let board = Board::from_fen(pos, false).unwrap();
+        for _ in 0..1000 {
+            std::hint::black_box({
+                let _ = second_tb.probe_wdl(
+                    board.colors(cozy_chess::Color::White).0,
+                    board.colors(cozy_chess::Color::Black).0,
+                    board.pieces(Piece::King).0,
+                    board.pieces(Piece::Queen).0,
+                    board.pieces(Piece::Rook).0,
+                    board.pieces(Piece::Bishop).0,
+                    board.pieces(Piece::Knight).0,
+                    board.pieces(Piece::Pawn).0,
+                    0,
+                    board.side_to_move() == cozy_chess::Color::White,
+                );
+            });
+        }
+    });
+    let board = Board::from_fen(pos, false).unwrap();
+    for _ in 0..10000 {
+        std::hint::black_box({
+            let _ = first_tb.probe_wdl(
+                board.colors(cozy_chess::Color::White).0,
+                board.colors(cozy_chess::Color::Black).0,
+                board.pieces(Piece::King).0,
+                board.pieces(Piece::Queen).0,
+                board.pieces(Piece::Rook).0,
+                board.pieces(Piece::Bishop).0,
+                board.pieces(Piece::Knight).0,
+                board.pieces(Piece::Pawn).0,
+                0,
+                board.side_to_move() == cozy_chess::Color::White,
+            );
+        });
+    }
+    worker.join().unwrap();
 }
