@@ -54,10 +54,10 @@ static TB_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 impl<E: EngineAdapter> TableBases<E> {
     pub fn new<P: AsRef<str>>(path: P) -> Result<Self, TBError> {
-        if TB_INITIALIZED.load(Ordering::SeqCst) {
+        // make sure the read and write are completed before other threads can access the global
+        if TB_INITIALIZED.swap(true, Ordering::SeqCst) {
             return Err(TBError::AlreadyInitialized);
         }
-        TB_INITIALIZED.store(true, Ordering::SeqCst);
 
         let init = unsafe { tb_init(path.as_ref()) };
 
@@ -180,7 +180,7 @@ impl<E: EngineAdapter> TableBases<E> {
 impl<E: EngineAdapter> Drop for TableBases<E> {
     fn drop(&mut self) {
         // only free the TBs if this handle is the last one
-        if Arc::strong_count(&self.handle) == 1 {
+        if Arc::strong_count(&self.handle) == 1 && TB_INITIALIZED.load(Ordering::SeqCst) {
             unsafe { tb_free() };
             TB_INITIALIZED.store(false, Ordering::SeqCst);
         }

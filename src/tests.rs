@@ -42,9 +42,14 @@ impl EngineAdapter for CozyChessAdapter {
     }
 }
 
-// #[test]
+#[test]
 fn test_probe_kpvk() {
-    let tb = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH).unwrap();
+    let tb = loop {
+        let test = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH);
+        if let Ok(tb) = test {
+            break tb;
+        }
+    };
     let test_pos_wins = [
         ("6k1/8/8/3P4/4K3/8/8/8 w - - 0 1", 1),
         ("8/7k/1p6/1P6/7K/8/8/8 w - - 0 1", 21),
@@ -110,18 +115,29 @@ fn test_probe_kpvk() {
     assert!(wdl_draw == Ok(WdlProbeResult::Draw));
 }
 
-// #[test]
+#[test]
 fn test_double_init() {
-    let _first_tb = std::hint::black_box(TableBases::<CozyChessAdapter>::new(SYZYGY_PATH).unwrap());
+    let first_tb = loop {
+        let test = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH);
+        if let Ok(tb) = test {
+            break tb;
+        }
+    };
     let second_tb = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH);
 
     assert!(matches!(second_tb, Err(TBError::AlreadyInitialized)));
+    std::hint::black_box(first_tb);
 }
 
 #[test]
 fn test_multithread() {
     let pos = "8/7k/1p6/1P6/7K/8/8/8 w - - 0 1";
-    let first_tb = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH).unwrap();
+    let first_tb = loop {
+        let test = TableBases::<CozyChessAdapter>::new(SYZYGY_PATH);
+        if let Ok(tb) = test {
+            break tb;
+        }
+    };
     let second_tb = first_tb.clone();
 
     let worker = std::thread::spawn(move || {

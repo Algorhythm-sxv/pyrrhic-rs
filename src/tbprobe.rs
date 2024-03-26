@@ -238,7 +238,7 @@ unsafe fn open_tb(mut str: *const i8, mut suffix: *const i8) -> Result<File, std
         let str = CStr::from_ptr(str as *mut i8);
         let suffix = CStr::from_ptr(suffix as *mut i8);
         let file = format!(
-            "{}/{}.{}",
+            "{}/{}{}",
             path.to_str().unwrap(),
             str.to_str().unwrap(),
             suffix.to_str().unwrap()
@@ -1736,6 +1736,8 @@ pub(crate) unsafe fn tb_free() {
     tb_init("");
     free(pieceEntry as *mut libc::c_void);
     free(pawnEntry as *mut libc::c_void);
+    pieceEntry = std::ptr::null_mut();
+    pawnEntry = std::ptr::null_mut();
 }
 #[rustfmt::skip]
 const OFF_DIAG: [i8; 64] = [
