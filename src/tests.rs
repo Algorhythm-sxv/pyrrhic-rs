@@ -7,7 +7,7 @@ use crate::{
 };
 use cozy_chess::*;
 
-const SYZYGY_PATH: &str = "/Users/venter/Downloads/syzygy";
+const SYZYGY_PATH: &str = env!("SYZYGY_PATH");
 #[derive(Copy, Clone)]
 struct CozyChessAdapter;
 

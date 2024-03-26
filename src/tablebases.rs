@@ -8,27 +8,42 @@ use std::{
 
 use crate::{
     engine_adapter::{EngineAdapter, Piece},
-    tbprobe::{tb_free, tb_init, tb_probe_root, tb_probe_wdl},
+    tbprobe::{self, tb_free, tb_init, tb_probe_root, tb_probe_wdl},
 };
 
+/// Tablebase error type
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TBError {
+    /// No tablebase files were found with the given search path
     BadPath,
+    /// Tablebase initialization failed
     InitFailed,
+    /// The tablebases are already initialized
     AlreadyInitialized,
+    /// Another `[TableBases]` instance exists
     NotSingleton,
+    /// Probing the tablebases failed
     ProbeFailed,
 }
 
+/// Result of a Win-Draw-Loss (WDL) table probe
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum WdlProbeResult {
+    /// The position is losing for the side to play
     Loss,
+    /// The position is a forced loss for the side to play, but the 50-move rule
+    /// makes this position a draw instead
     BlessedLoss,
+    /// The position is drawn
     Draw,
+    /// The position is a forced win for the side to play, but the 50-move rule
+    /// makes this position a draw instead
     CursedWin,
+    /// The position is winning for the side to play
     Win,
 }
 
+/// Result of a Distance-To-Zero (DTZ) table probe
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DtzProbeResult {
     Stalemate,
@@ -43,6 +58,11 @@ pub enum DtzProbeResult {
     },
 }
 
+/// Handle to tablebase probing code.
+///
+/// ## Usage
+/// This struct provides a safe wrapper around the unsafe Pyrrhic API. It can be
+/// safely sent across threads and manages initialization and de-initialization of the tablebases.
 #[derive(Clone)]
 pub struct TableBases<E: EngineAdapter> {
     handle: Arc<()>,
@@ -50,9 +70,21 @@ pub struct TableBases<E: EngineAdapter> {
 }
 
 // guard against multiple initialization and freeing
+#[doc(hidden)]
 static TB_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 impl<E: EngineAdapter> TableBases<E> {
+    /// Initialize the tablebases
+    /// * `path` - a colon-seperated list of file paths to search for tablebase files in e.g. "./syzygy/tb345:./syzygy/tb6:./syzygy/tb7"
+    ///
+    /// ## Notes:
+    /// On windows, Pyrrhic's use of colons causes issues due to drive letters in windows absolute paths e.g. `C:\Program Files`.
+    /// A workaround is to use relative paths, or ensure your engine executable and tablebases are on the same drive and use the
+    /// `\Program Files` path format.
+    ///
+    /// ## Errors:
+    /// This function will return `[TBError::AlreadyInitialized]` if another `TableBases` instance has already been created. To get multiple
+    /// handles to the tablebases for sharing across threads, use `TableBases::clone`.
     pub fn new<P: AsRef<str>>(path: P) -> Result<Self, TBError> {
         // make sure the read and write are completed before other threads can access the global
         if TB_INITIALIZED.swap(true, Ordering::SeqCst) {
@@ -62,16 +94,21 @@ impl<E: EngineAdapter> TableBases<E> {
         let init = unsafe { tb_init(path.as_ref()) };
 
         if init {
-            Ok(Self {
-                handle: Arc::new(()),
-                _engine: PhantomData,
-            })
+            if unsafe { tbprobe::TB_LARGEST == 0 } {
+                Err(TBError::BadPath)
+            } else {
+                Ok(Self {
+                    handle: Arc::new(()),
+                    _engine: PhantomData,
+                })
+            }
         } else {
             TB_INITIALIZED.store(false, Ordering::SeqCst);
             Err(TBError::InitFailed)
         }
     }
 
+    /// Probe the Win-Draw-Loss (WDL) tables.
     #[allow(clippy::too_many_arguments)]
     pub fn probe_wdl(
         &self,
@@ -101,6 +138,12 @@ impl<E: EngineAdapter> TableBases<E> {
             _ => Err(TBError::ProbeFailed),
         }
     }
+
+    /// Probe the Distance-To-Zero (DTZ) tables.
+    ///
+    /// ## Notes:
+    /// The underlying `probe_root` function is not thread safe, and attempts to call this function while multiple
+    /// `TableBases` exist will return `TBError::NotSingleton`
     #[allow(clippy::too_many_arguments)]
     pub fn probe_root(
         &self,

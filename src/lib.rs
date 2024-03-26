@@ -6,9 +6,11 @@
 #![allow(unused_assignments)]
 #![allow(unused_mut)]
 
+#![doc = include_str!("../README.md")]
+
 extern crate libc;
 pub mod engine_adapter;
-pub mod tbprobe;
+mod tbprobe;
 
 pub mod tablebases;
 pub use tablebases::*;
