@@ -179,7 +179,10 @@ impl<E: EngineAdapter> TableBases<E> {
 
 impl<E: EngineAdapter> Drop for TableBases<E> {
     fn drop(&mut self) {
-        unsafe { tb_free() };
-        TB_INITIALIZED.store(false, Ordering::SeqCst);
+        // only free the TBs if this handle is the last one
+        if Arc::strong_count(&self.handle) == 1 {
+            unsafe { tb_free() };
+            TB_INITIALIZED.store(false, Ordering::SeqCst);
+        }
     }
 }
