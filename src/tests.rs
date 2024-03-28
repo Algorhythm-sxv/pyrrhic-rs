@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use crate::{
     engine_adapter::{Color, EngineAdapter},
-    tablebases::{DtzProbeResult, TableBases, WdlProbeResult},
-    TBError,
+    tablebases::{TableBases, WdlProbeResult},
+    DtzProbeValue, TBError,
 };
 use cozy_chess::*;
 
@@ -86,16 +86,9 @@ fn test_probe_kpvk() {
             test_board_win.side_to_move() == cozy_chess::Color::White,
         );
 
-        assert!(match dtz_result.unwrap() {
-            DtzProbeResult::Stalemate | DtzProbeResult::Checkmate => false,
-            DtzProbeResult::DtzResult {
-                wdl: _,
-                from_square: _,
-                to_square: _,
-                promotion: _,
-                ep: _,
-                dtz,
-            } => dtz == dtz_expected,
+        assert!(match dtz_result.unwrap().root {
+            DtzProbeValue::DtzValue { dtz, .. } => dtz == dtz_expected,
+            _ => false,
         })
     }
     let test_board_draw = Board::from_str(test_pos_draw).unwrap();

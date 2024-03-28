@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     engine_adapter::{EngineAdapter, Piece},
-    tbprobe::{self, tb_free, tb_init, tb_probe_root, tb_probe_wdl},
+    tbprobe::{self, tb_free, tb_init, tb_probe_root, tb_probe_wdl, TB_LARGEST},
 };
 
 /// Tablebase error type
@@ -43,19 +43,41 @@ pub enum WdlProbeResult {
     Win,
 }
 
-/// Result of a Distance-To-Zero (DTZ) table probe
+/// DTZ value for a single position extracted from the tablebases
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum DtzProbeResult {
+pub enum DtzProbeValue {
+    /// The position is a stalemate
     Stalemate,
+    /// The position is a checkmate
     Checkmate,
-    DtzResult {
+    /// The DTZ probe failed
+    Failed,
+    /// The DTZ probe succeeded
+    DtzValue {
+        /// WDL value of the position
         wdl: WdlProbeResult,
+        /// Start square of the suggested move
         from_square: u8,
+        /// End square of the suggested move
         to_square: u8,
+        /// Promotion of the suggested move. `[Piece::Pawn]` if there is no promotion
         promotion: Piece,
+        /// Whether this move is an en passent capture
         ep: bool,
+        /// Number of plies from this position to a zeroing move (pawn move or capture)
         dtz: u16,
     },
+}
+
+/// Result of a Distance-To-Zero (DTZ) table probe
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct DtzProbeResult {
+    /// DTZ probe result for the root of the position
+    pub root: DtzProbeValue,
+    /// DTZ probe results for all moves from the root.
+    pub moves: [DtzProbeValue; 256],
+    /// The number of moves score in `moves`, the remaining entries will be `[DtzProbeValue::Failed]`
+    pub num_moves: usize,
 }
 
 /// Handle to tablebase probing code.
@@ -165,6 +187,7 @@ impl<E: EngineAdapter> TableBases<E> {
         if Arc::strong_count(&self.handle) > 1 {
             return Err(TBError::NotSingleton);
         }
+        let mut results = [0u32; 256];
         let result = unsafe {
             tb_probe_root::<E>(
                 white,
@@ -178,45 +201,37 @@ impl<E: EngineAdapter> TableBases<E> {
                 rule50,
                 ep,
                 turn,
-                std::ptr::null_mut(),
+                results.as_mut_ptr(),
             )
         };
 
+        let result = extract_dtz_result(result);
+        let mut dtz_data = DtzProbeResult {
+            root: result,
+            moves: [DtzProbeValue::Failed; 256],
+            num_moves: 0,
+        };
         match result {
-            0xFFFFFFFF => Err(TBError::ProbeFailed),
-            2 => Ok(DtzProbeResult::Stalemate),
-            4 => Ok(DtzProbeResult::Checkmate),
-            other => {
-                let wdl_result = other & 0xF;
-                let to_square = (other & 0x3F0) >> 4;
-                let from_square = (other & 0xFC00) >> 10;
-                let promotion = (other & 0x70000) >> 16;
-                let ep = (other & 0x80000) >> 19;
-                let dtz = (other & 0xFFF00000) >> 20;
-
-                Ok(DtzProbeResult::DtzResult {
-                    wdl: match wdl_result {
-                        0 => WdlProbeResult::Loss,
-                        1 => WdlProbeResult::BlessedLoss,
-                        2 => WdlProbeResult::Draw,
-                        3 => WdlProbeResult::CursedWin,
-                        4 => WdlProbeResult::Win,
-                        _ => unreachable!(),
-                    },
-                    from_square: from_square as u8,
-                    to_square: to_square as u8,
-                    promotion: match promotion {
-                        1 => Piece::Queen,
-                        2 => Piece::Rook,
-                        3 => Piece::Bishop,
-                        4 => Piece::Knight,
-                        _ => Piece::Pawn,
-                    },
-                    ep: ep != 0,
-                    dtz: dtz as u16,
-                })
+            DtzProbeValue::Failed => return Err(TBError::ProbeFailed),
+            DtzProbeValue::Stalemate | DtzProbeValue::Checkmate => Ok(dtz_data),
+            DtzProbeValue::DtzValue { .. } => {
+                for value in results.map(extract_dtz_result) {
+                    match value {
+                        DtzProbeValue::Failed => break,
+                        other => {
+                            dtz_data.moves[dtz_data.num_moves] = other;
+                            dtz_data.num_moves += 1;
+                        }
+                    }
+                }
+                Ok(dtz_data)
             }
         }
+    }
+
+    /// The number of pieces (including kings) in the largest available tablebase
+    pub fn max_pieces(&self) -> u32 {
+        unsafe { TB_LARGEST as u32 }
     }
 }
 
@@ -226,6 +241,44 @@ impl<E: EngineAdapter> Drop for TableBases<E> {
         if Arc::strong_count(&self.handle) == 1 && TB_INITIALIZED.load(Ordering::SeqCst) {
             unsafe { tb_free() };
             TB_INITIALIZED.store(false, Ordering::SeqCst);
+        }
+    }
+}
+
+fn extract_dtz_result(result: u32) -> DtzProbeValue {
+    match result {
+        0xFFFFFFFF => DtzProbeValue::Failed,
+        2 => DtzProbeValue::Stalemate,
+        4 => DtzProbeValue::Checkmate,
+        other => {
+            let wdl_result = other & 0xF;
+            let to_square = (other & 0x3F0) >> 4;
+            let from_square = (other & 0xFC00) >> 10;
+            let promotion = (other & 0x70000) >> 16;
+            let ep = (other & 0x80000) >> 19;
+            let dtz = (other & 0xFFF00000) >> 20;
+
+            DtzProbeValue::DtzValue {
+                wdl: match wdl_result {
+                    0 => WdlProbeResult::Loss,
+                    1 => WdlProbeResult::BlessedLoss,
+                    2 => WdlProbeResult::Draw,
+                    3 => WdlProbeResult::CursedWin,
+                    4 => WdlProbeResult::Win,
+                    _ => unreachable!(),
+                },
+                from_square: from_square as u8,
+                to_square: to_square as u8,
+                promotion: match promotion {
+                    1 => Piece::Queen,
+                    2 => Piece::Rook,
+                    3 => Piece::Bishop,
+                    4 => Piece::Knight,
+                    _ => Piece::Pawn,
+                },
+                ep: ep != 0,
+                dtz: dtz as u16,
+            }
         }
     }
 }
