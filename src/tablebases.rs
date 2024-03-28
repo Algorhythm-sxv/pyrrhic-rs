@@ -43,6 +43,23 @@ pub enum WdlProbeResult {
     Win,
 }
 
+/// Result of a successful DTZ probe
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct DtzResult {
+    /// WDL value of the position
+    pub wdl: WdlProbeResult,
+    /// Start square of the suggested move
+    pub from_square: u8,
+    /// End square of the suggested move
+    pub to_square: u8,
+    /// Promotion of the suggested move. `[Piece::Pawn]` if there is no promotion
+    pub promotion: Piece,
+    /// Whether this move is an en passent capture
+    pub ep: bool,
+    /// Number of plies from this position to a zeroing move (pawn move or capture)
+    pub dtz: u16,
+}
+
 /// DTZ value for a single position extracted from the tablebases
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DtzProbeValue {
@@ -53,20 +70,7 @@ pub enum DtzProbeValue {
     /// The DTZ probe failed
     Failed,
     /// The DTZ probe succeeded
-    DtzValue {
-        /// WDL value of the position
-        wdl: WdlProbeResult,
-        /// Start square of the suggested move
-        from_square: u8,
-        /// End square of the suggested move
-        to_square: u8,
-        /// Promotion of the suggested move. `[Piece::Pawn]` if there is no promotion
-        promotion: Piece,
-        /// Whether this move is an en passent capture
-        ep: bool,
-        /// Number of plies from this position to a zeroing move (pawn move or capture)
-        dtz: u16,
-    },
+    DtzResult(DtzResult),
 }
 
 /// Result of a Distance-To-Zero (DTZ) table probe
@@ -214,7 +218,7 @@ impl<E: EngineAdapter> TableBases<E> {
         match result {
             DtzProbeValue::Failed => return Err(TBError::ProbeFailed),
             DtzProbeValue::Stalemate | DtzProbeValue::Checkmate => Ok(dtz_data),
-            DtzProbeValue::DtzValue { .. } => {
+            DtzProbeValue::DtzResult(_) => {
                 for value in results.map(extract_dtz_result) {
                     match value {
                         DtzProbeValue::Failed => break,
@@ -229,7 +233,7 @@ impl<E: EngineAdapter> TableBases<E> {
         }
     }
 
-    /// The number of pieces (including kings) in the largest available tablebase
+    /// The maximum number of pieces (including kings) that the loaded tablebases can be probed with
     pub fn max_pieces(&self) -> u32 {
         unsafe { TB_LARGEST as u32 }
     }
@@ -258,7 +262,7 @@ fn extract_dtz_result(result: u32) -> DtzProbeValue {
             let ep = (other & 0x80000) >> 19;
             let dtz = (other & 0xFFF00000) >> 20;
 
-            DtzProbeValue::DtzValue {
+            DtzProbeValue::DtzResult(DtzResult {
                 wdl: match wdl_result {
                     0 => WdlProbeResult::Loss,
                     1 => WdlProbeResult::BlessedLoss,
@@ -278,7 +282,7 @@ fn extract_dtz_result(result: u32) -> DtzProbeValue {
                 },
                 ep: ep != 0,
                 dtz: dtz as u16,
-            }
+            })
         }
     }
 }

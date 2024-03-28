@@ -87,7 +87,7 @@ fn test_probe_kpvk() {
         );
 
         assert!(match dtz_result.unwrap().root {
-            DtzProbeValue::DtzValue { dtz, .. } => dtz == dtz_expected,
+            DtzProbeValue::DtzResult(result) => result.dtz == dtz_expected,
             _ => false,
         })
     }
